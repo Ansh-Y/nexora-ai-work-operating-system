@@ -50,6 +50,36 @@ enum ProposalStatus {
   EXPIRED
 }
 
+enum GitHubAutomationTrigger {
+  PULL_REQUEST_OPENED
+  PULL_REQUEST_UPDATED
+  PULL_REQUEST_APPROVED
+  PULL_REQUEST_MERGED
+  PULL_REQUEST_CLOSED
+  ISSUE_OPENED
+  ISSUE_CLOSED
+  COMMIT_PUSHED
+}
+
+enum GitHubAutomationAction {
+  TRANSITION_TASK_STATUS
+  ADD_COMMENT
+}
+
+enum GitHubAutomationExecutionMode {
+  AUTOMATIC
+  APPROVAL_REQUIRED
+}
+
+enum GitHubAutomationRunStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  EXECUTED
+  FAILED
+  SKIPPED
+}
+
 enum ActorType {
   USER
   AI
@@ -113,6 +143,9 @@ model User {
   uploadedMeetingRecordings MeetingRecording[]   @relation("MeetingRecordingUploader")
   githubConnections         GitHubConnection[]   @relation("GitHubConnectionOwner")
   githubOAuthStates         GitHubOAuthState[]
+  createdGitHubRules        GitHubAutomationRule[] @relation("GitHubRuleCreator")
+  updatedGitHubRules        GitHubAutomationRule[] @relation("GitHubRuleUpdater")
+  reviewedGitHubRuns        GitHubAutomationRun[]  @relation("GitHubRunReviewer")
 }
 
 model Organization {
@@ -145,6 +178,8 @@ model Organization {
   searchChunks        SearchChunk[]
   invites             Invitation[]
   refreshSessions     RefreshSession[]
+  gitHubAutomationRules GitHubAutomationRule[]
+  gitHubAutomationRuns  GitHubAutomationRun[]
 }
 
 model RefreshSession {
@@ -210,6 +245,7 @@ model Project {
   meetings           Meeting[]
   githubRepositories GitHubRepository[]
   documents          Document[]
+  gitHubAutomationRules GitHubAutomationRule[]
 
   @@index([organizationId, status])
   @@index([organizationId, updatedAt])
@@ -238,6 +274,8 @@ model Task {
   comments                 Comment[]
   originatingMeetingAction MeetingActionItem?
   githubEvents             GitHubEvent[]
+  gitHubAutomationRules    GitHubAutomationRule[]
+  gitHubAutomationRuns     GitHubAutomationRun[]
 
   @@index([organizationId, projectId, status])
   @@index([organizationId, assigneeId])
@@ -569,6 +607,7 @@ model GitHubRepository {
   connection              GitHubConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
   project                 Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   events                  GitHubEvent[]
+  automationRules         GitHubAutomationRule[]
 
   @@unique([organizationId, githubRepoId])
   @@index([organizationId, projectId])
@@ -593,6 +632,7 @@ model GitHubEvent {
   organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   repository       GitHubRepository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
   linkedTask       Task?            @relation(fields: [linkedTaskId], references: [id], onDelete: SetNull)
+  automationRuns   GitHubAutomationRun[]
 
   @@unique([repositoryId, githubDeliveryId])
   @@index([organizationId, createdAt])
@@ -615,4 +655,68 @@ model AuditEvent {
 
   @@index([organizationId, createdAt])
   @@index([organizationId, targetType, targetId])
+}
+
+model GitHubAutomationRule {
+  id                  String                        @id @default(uuid()) @db.Uuid
+  organizationId      String                        @db.Uuid
+  repositoryId        String?                       @db.Uuid
+  projectId           String?                       @db.Uuid
+  taskId              String?                       @db.Uuid
+  name                String
+  description         String                        @default("")
+  triggerEvent        GitHubAutomationTrigger
+  action              GitHubAutomationAction        @default(TRANSITION_TASK_STATUS)
+  targetStatus        TaskStatus?
+  executionMode       GitHubAutomationExecutionMode @default(AUTOMATIC)
+  conditions          Json                          @default("{}")
+  isEnabled           Boolean                       @default(true)
+  createdById         String                        @db.Uuid
+  updatedById         String?                       @db.Uuid
+  lastExecutedAt      DateTime?
+  lastExecutionStatus GitHubAutomationRunStatus?
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @updatedAt
+
+  organization        Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  repository          GitHubRepository?             @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  project             Project?                      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  task                Task?                         @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  createdBy           User                          @relation("GitHubRuleCreator", fields: [createdById], references: [id])
+  updatedBy           User?                         @relation("GitHubRuleUpdater", fields: [updatedById], references: [id])
+  runs                GitHubAutomationRun[]
+
+  @@index([organizationId, isEnabled])
+  @@index([organizationId, repositoryId, triggerEvent])
+}
+
+model GitHubAutomationRun {
+  id             String                        @id @default(uuid()) @db.Uuid
+  organizationId String                        @db.Uuid
+  ruleId         String                        @db.Uuid
+  eventId        String?                       @db.Uuid
+  taskId         String?                       @db.Uuid
+  triggerEvent   GitHubAutomationTrigger
+  action         GitHubAutomationAction
+  targetStatus   TaskStatus?
+  status         GitHubAutomationRunStatus     @default(PENDING_APPROVAL)
+  executionMode  GitHubAutomationExecutionMode
+  explanation    String                        @default("")
+  payloadSummary Json                          @default("{}")
+  errorMessage   String?
+  reviewedById   String?                       @db.Uuid
+  reviewedAt     DateTime?
+  executedAt     DateTime?
+  createdAt      DateTime                      @default(now())
+  updatedAt      DateTime                      @updatedAt
+
+  organization   Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  rule           GitHubAutomationRule          @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  event          GitHubEvent?                  @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  task           Task?                         @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  reviewedBy     User?                         @relation("GitHubRunReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
+  @@index([organizationId, ruleId, createdAt])
+  @@index([organizationId, taskId])
 }

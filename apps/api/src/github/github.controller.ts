@@ -1,11 +1,17 @@
-import { Body, Controller, Delete, Get, Headers, Param, ParseUUIDPipe, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, Param, ParseUUIDPipe, Patch, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import { AuthGuard } from '../common/auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { Principal } from '../common/auth.types';
 import { GitHubService } from './github.service';
-import { LinkGitHubRepositoryDto } from './github.dto';
+import {
+  CreateGitHubAutomationRuleDto,
+  GitHubAutomationRulesQueryDto,
+  GitHubAutomationRunsQueryDto,
+  LinkGitHubRepositoryDto,
+  UpdateGitHubAutomationRuleDto,
+} from './github.dto';
 
 type RawBodyRequest = Request & { rawBody?: Buffer };
 
@@ -51,6 +57,56 @@ export class GitHubController {
 
   @UseGuards(AuthGuard) @ApiBearerAuth() @Get('events')
   events(@CurrentUser() user: Principal) { return this.service.events(user); }
+
+  @UseGuards(AuthGuard) @ApiBearerAuth() @Get('rules')
+  listRules(@CurrentUser() user: Principal, @Query() query: GitHubAutomationRulesQueryDto) {
+    return this.service.listRules(user, query);
+  }
+
+  @UseGuards(AuthGuard) @ApiBearerAuth() @Get('rules/:id')
+  getRule(@CurrentUser() user: Principal, @Param('id', ParseUUIDPipe) id: string) {
+    return this.service.getRule(user, id);
+  }
+
+  @UseGuards(AuthGuard) @ApiBearerAuth() @Post('rules')
+  createRule(@CurrentUser() user: Principal, @Body() dto: CreateGitHubAutomationRuleDto) {
+    return this.service.createRule(user, dto);
+  }
+
+  @UseGuards(AuthGuard) @ApiBearerAuth() @Patch('rules/:id')
+  updateRule(@CurrentUser() user: Principal, @Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateGitHubAutomationRuleDto) {
+    return this.service.updateRule(user, id, dto);
+  }
+
+  @UseGuards(AuthGuard) @ApiBearerAuth() @Delete('rules/:id')
+  deleteRule(@CurrentUser() user: Principal, @Param('id', ParseUUIDPipe) id: string) {
+    return this.service.deleteRule(user, id);
+  }
+
+  @UseGuards(AuthGuard) @ApiBearerAuth() @Post('rules/:id/toggle')
+  toggleRule(@CurrentUser() user: Principal, @Param('id', ParseUUIDPipe) id: string) {
+    return this.service.toggleRule(user, id);
+  }
+
+  @UseGuards(AuthGuard) @ApiBearerAuth() @Get('runs')
+  listRuns(@CurrentUser() user: Principal, @Query() query: GitHubAutomationRunsQueryDto) {
+    return this.service.listRuns(user, query);
+  }
+
+  @UseGuards(AuthGuard) @ApiBearerAuth() @Post('runs/:id/approve')
+  approveRun(@CurrentUser() user: Principal, @Param('id', ParseUUIDPipe) id: string) {
+    return this.service.approveRun(user, id);
+  }
+
+  @UseGuards(AuthGuard) @ApiBearerAuth() @Post('runs/:id/reject')
+  rejectRun(@CurrentUser() user: Principal, @Param('id', ParseUUIDPipe) id: string) {
+    return this.service.rejectRun(user, id);
+  }
+
+  @UseGuards(AuthGuard) @ApiBearerAuth() @Get('tasks/:taskId/activity')
+  taskActivity(@CurrentUser() user: Principal, @Param('taskId', ParseUUIDPipe) taskId: string) {
+    return this.service.taskActivity(user, taskId);
+  }
 
   @Post('webhook')
   webhook(

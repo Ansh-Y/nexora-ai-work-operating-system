@@ -40,6 +40,7 @@ export function verifyGithubSignature(payload: Buffer, signature: string | undef
   return expected.length === received.length && timingSafeEqual(expected, received);
 }
 
-export function taskReference(text: string) {
-  return text.match(/\bNEXORA-TASK:([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\b/i)?.[1] ?? null;
+export function taskReference(text: string | null | undefined) {
+  if (typeof text !== 'string') return null;
+  return text.match(/(?:^|[^a-z0-9_-])NEXORA-TASK:([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})(?![0-9a-f-])/i)?.[1] ?? null;
 }

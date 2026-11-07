@@ -47,7 +47,12 @@ async function main() {
   let status = 1;
   try {
     status = run(process.execPath, [resolve(apiDirectory, '../../node_modules/prisma/build/index.js'), 'migrate', 'deploy'], env);
-    if (status === 0 && mode === 'api') status = run(process.execPath, [resolve(apiDirectory, '../../node_modules/vitest/vitest.mjs'), 'run', '--config', './vitest.config.mts', 'test/app.e2e-spec.ts', 'test/notifications-reliability.spec.ts'], env);
+    if (status === 0 && mode === 'api') {
+      const vitestBin = resolve(apiDirectory, '../../node_modules/vitest/vitest.mjs');
+      status = run(process.execPath, [vitestBin, 'run', '--config', './vitest.config.mts', 'test/app.e2e-spec.ts'], env);
+      if (status === 0) status = run(process.execPath, [vitestBin, 'run', '--config', './vitest.config.mts', 'test/github-automation.e2e-spec.ts'], env);
+      if (status === 0) status = run(process.execPath, [vitestBin, 'run', '--config', './vitest.config.mts', 'test/notifications-reliability.spec.ts'], env);
+    }
     if (status === 0 && mode === 'browser') status = run(process.execPath, [resolve(rootDirectory, 'node_modules/typescript/bin/tsc'), '--project', 'tsconfig.browser.json'], env);
     if (status === 0 && mode === 'browser') status = run(process.execPath, [resolve(rootDirectory, 'node_modules/@playwright/test/cli.js'), 'test', '--config', resolve(rootDirectory, 'playwright.config.ts')], env, rootDirectory);
   } finally {

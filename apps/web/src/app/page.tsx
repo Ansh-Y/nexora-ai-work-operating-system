@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Bell, Blocks, Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock3, Command, FileText, Filter, GitBranch, LayoutDashboard, List, LoaderCircle, LogOut, Menu, MessageSquare, MoreHorizontal, Plus, Search, Send, Settings2, ShieldCheck, Sparkles, Target, Users, X, Zap } from "lucide-react";
+import { Activity, ArrowDownRight, ArrowRight, ArrowUpRight, Bell, Blocks, Bot, CalendarDays, Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, Clock3, Command, Copy, FileText, Filter, GitBranch, LayoutDashboard, List, LoaderCircle, LogOut, Menu, MessageSquare, MoreHorizontal, Plus, Search, Send, Settings2, ShieldCheck, Sparkles, Target, Users, X, Zap } from "lucide-react";
 import { io, Socket } from "socket.io-client";
 import { Background, Controls, Handle, Position, ReactFlow, type Edge, type Node, type NodeProps } from "@xyflow/react";
 import { api, ApiError } from "@/lib/api";
@@ -71,6 +71,8 @@ export default function Home() {
   const [commentTask, setCommentTask] = useState<Task | null>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [commentBody, setCommentBody] = useState("");
+  const [taskActivity, setTaskActivity] = useState<any>(null);
+  const [taskModalTab, setTaskModalTab] = useState<"comments" | "github">("comments");
   const [draggedTask, setDraggedTask] = useState<Task | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("TEAM_MEMBER");
@@ -249,7 +251,19 @@ export default function Home() {
     try { await api.post(`/tasks/${dependencySource}/dependencies`, { blockedTaskId: (document.getElementById("blocked-task") as HTMLSelectElement).value }); await refreshProjects(project?.id); setModal(null); notify("Dependency saved"); }
     catch (e) { handleError(e); } finally { setBusy(false); }
   }
-  async function openComments(task: Task) { setCommentTask(task); setCommentBody(""); try { setComments(await api.get(`/tasks/${task.id}/comments`) as any[]); } catch (e) { handleError(e); } }
+  async function openComments(task: Task) {
+    setCommentTask(task);
+    setCommentBody("");
+    setTaskModalTab("comments");
+    setTaskActivity(null);
+    try { setComments(await api.get(`/tasks/${task.id}/comments`) as any[]); } catch (e) { handleError(e); }
+    try {
+      const act = await api.get(`/integrations/github/tasks/${task.id}/activity`);
+      setTaskActivity(act);
+    } catch {
+      // non-blocking if github is not linked
+    }
+  }
   async function sendComment(e: React.FormEvent) { e.preventDefault(); if (!commentTask || !commentBody.trim()) return; setBusy(true); try { await api.post(`/tasks/${commentTask.id}/comments`, { body: commentBody.trim() }); setComments(await api.get(`/tasks/${commentTask.id}/comments`) as any[]); setCommentBody(""); notify("Comment added"); } catch (e) { handleError(e); } finally { setBusy(false); } }
   async function generatePlan(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); setError("");
@@ -362,7 +376,141 @@ export default function Home() {
         {modal === "plan" && proposal && <div className="proposal-review"><div className="proposal-project"><span className="project-symbol symbol-0"><Blocks size={16}/></span><span><b>{proposal.proposed.projectName}</b><small>{proposal.proposed.projectDescription}</small></span></div><div className="review-summary"><span><b>{proposal.proposed.tasks.length}</b> proposed tasks</span><span><b>{proposal.proposed.milestones.length}</b> milestones</span><span className="review-provider">{proposal.provider === "local_rules" ? "Local draft" : "AI generated"}</span></div>{proposal.proposed.assumptions?.length > 0 && <div className="assumption-note"><CircleHelp size={14}/><span><b>Assumptions to review</b><small>{proposal.proposed.assumptions.join(" ")}</small></span></div>}<div className="review-task-list">{proposal.proposed.tasks.map((t, i) => <div className="review-task" key={i}><span className="review-index">{String(i + 1).padStart(2, "0")}</span><span><b>{t.title}</b><small>{t.description || (t.blockedBy?.length ? `Depends on task ${t.blockedBy.map(x => x + 1).join(", ")}` : "No description supplied")}</small></span><span className={`priority-label ${t.priority?.toLowerCase()}`}>{t.priority || "MEDIUM"}</span><span className="review-due">{t.dueDate ? dueLabel(t.dueDate) : "No date"}</span></div>)}</div><div className="review-footer"><span><ShieldCheck size={14}/> Changes are logged in the workspace audit.</span><div><button className="button button-secondary" disabled={busy} onClick={() => decideProposal(false)}>Decline</button><button className="button button-primary" disabled={busy} onClick={() => decideProposal(true)}>{busy ? <LoaderCircle className="spin" size={15}/> : <Check size={15}/>} Approve and create</button></div></div></div>}
         {modal === "invite" && <form className="modal-form" onSubmit={inviteMember}>{inviteLink ? <div className="invite-result"><div className="invite-result-icon"><Check size={18}/></div><h3>Secure invite is ready</h3><p>Token stored as a hash. Copy this one-time invite token for delivery; email sending is not set up yet.</p><code>{inviteLink}</code><button type="button" className="button button-secondary button-wide" onClick={() => navigator.clipboard?.writeText(inviteLink).then(() => notify("Invite token copied"))}><FileText size={14}/> Copy invite token</button></div> : <><label>Email address<input autoFocus type="email" required value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="teammate@company.com"/></label><label>Workspace role<select value={inviteRole} onChange={e => setInviteRole(e.target.value)}><option value="TEAM_MEMBER">Team member</option><option value="PROJECT_MANAGER">Project manager</option><option value="VIEWER">Viewer</option><option value="ADMIN">Admin</option></select></label><p className="field-hint">Only owners and admins can create invitations.</p><ModalFooter busy={busy} submitLabel="Create invitation" onCancel={() => setModal(null)}/></>}</form>}
       </div></div>}
-    {commentTask && <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setCommentTask(null); }}><section className="comment-modal"><div className="comment-modal-head"><div><div className="eyebrow">TASK DISCUSSION</div><h2>{commentTask.title}</h2></div><button className="icon-button" aria-label="Close task discussion" onClick={() => setCommentTask(null)}><X size={18}/></button></div><div className="comment-list">{comments.length ? comments.map((comment: any) => <div className="comment-item" key={comment.id}><div className="person-avatar">{initials(comment.author.name)}</div><div><div className="comment-meta"><b>{comment.author.name}</b><time>{new Date(comment.createdAt).toLocaleString("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</time></div><p>{comment.body}</p></div></div>) : <div className="comment-empty"><MessageSquare size={17}/><span>No comments yet. Start the conversation with your team.</span></div>}</div><form className="comment-form" onSubmit={sendComment}><textarea rows={3} required maxLength={5000} value={commentBody} onChange={e => setCommentBody(e.target.value)} placeholder="Write a comment…"/><div><span>{user.name} · Workspace members can reply</span><button className="button button-primary small-button" disabled={busy || !commentBody.trim()}><Send size={13}/> Send</button></div></form></section></div>}
+    {commentTask && (
+      <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setCommentTask(null); }}>
+        <section className="comment-modal">
+          <div className="comment-modal-head">
+            <div>
+              <div className="eyebrow">TASK DETAILS & ACTIVITY</div>
+              <h2>{commentTask.title}</h2>
+            </div>
+            <button className="icon-button" aria-label="Close task discussion" onClick={() => setCommentTask(null)}>
+              <X size={18}/>
+            </button>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", padding: "10px 0 8px", borderBottom: "1px solid var(--line)" }}>
+            <div className="segmented">
+              <button className={taskModalTab === "comments" ? "selected" : ""} onClick={() => setTaskModalTab("comments")}>
+                <MessageSquare size={12}/> Comments ({comments.length})
+              </button>
+              <button className={taskModalTab === "github" ? "selected" : ""} onClick={() => setTaskModalTab("github")}>
+                <GitBranch size={12}/> GitHub Activity ({(taskActivity?.events?.length || 0) + (taskActivity?.runs?.length || 0)})
+              </button>
+            </div>
+            <button
+              type="button"
+              className="button button-secondary small-button"
+              style={{ fontSize: "8.5px", padding: "3px 8px", height: "26px" }}
+              onClick={() => {
+                navigator.clipboard?.writeText(`NEXORA-TASK:${commentTask.id}`).then(() => notify(`Task ref NEXORA-TASK:${commentTask.id.slice(0, 8)}… copied`));
+              }}
+              title="Click to copy task reference"
+            >
+              <Copy size={11}/> NEXORA-TASK:{commentTask.id.slice(0, 8)}…
+            </button>
+          </div>
+
+          {taskModalTab === "comments" ? (
+            <>
+              <div className="comment-list">
+                {comments.length ? comments.map((comment: any) => (
+                  <div className="comment-item" key={comment.id}>
+                    <div className="person-avatar">{initials(comment.author.name)}</div>
+                    <div>
+                      <div className="comment-meta">
+                        <b>{comment.author.name}</b>
+                        <time>{new Date(comment.createdAt).toLocaleString("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</time>
+                      </div>
+                      <p>{comment.body}</p>
+                    </div>
+                  </div>
+                )) : (
+                  <div className="comment-empty">
+                    <MessageSquare size={17}/>
+                    <span>No comments yet. Start the conversation with your team.</span>
+                  </div>
+                )}
+              </div>
+              <form className="comment-form" onSubmit={sendComment}>
+                <textarea rows={3} required maxLength={5000} value={commentBody} onChange={e => setCommentBody(e.target.value)} placeholder="Write a comment…"/>
+                <div>
+                  <span>{user.name} · Workspace members can reply</span>
+                  <button className="button button-primary small-button" disabled={busy || !commentBody.trim()}>
+                    <Send size={13}/> Send
+                  </button>
+                </div>
+              </form>
+            </>
+          ) : (
+            <div style={{ minHeight: "220px", maxHeight: "390px", overflowY: "auto", padding: "10px 0", display: "flex", flexDirection: "column", gap: "10px" }}>
+              <div style={{ padding: "9px 12px", background: "var(--panel-wash, #f7f7fa)", borderRadius: "8px", border: "1px solid var(--line)", fontSize: "9px" }}>
+                <div style={{ fontWeight: 600, color: "var(--ink)", marginBottom: "3px", display: "flex", alignItems: "center", gap: "5px" }}>
+                  <GitBranch size={13} style={{ color: "#7b68ee" }}/> Link PRs & Commits to this Task
+                </div>
+                <div style={{ color: "#7d8690", lineHeight: 1.4 }}>
+                  Include <code style={{ background: "#ede9fe", color: "#5b21b6", padding: "1px 5px", borderRadius: "4px", fontSize: "9px" }}>NEXORA-TASK:{commentTask.id}</code> in your pull request description or commit message to record linked history and trigger workflow automations.
+                </div>
+              </div>
+
+              {taskActivity?.runs?.length > 0 && (
+                <div>
+                  <div className="eyebrow" style={{ marginBottom: "6px" }}>AUTOMATION RUNS ({taskActivity.runs.length})</div>
+                  <div style={{ display: "grid", gap: "6px" }}>
+                    {taskActivity.runs.map((run: any) => (
+                      <div key={run.id} style={{ padding: "8px 10px", border: "1px solid var(--line)", borderRadius: "6px", fontSize: "9px", background: "var(--surface)" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "3px" }}>
+                          <b style={{ color: "var(--ink)" }}>{run.ruleName}</b>
+                          <span className={`status-tag ${run.status.toLowerCase()}`}>{run.status.replaceAll("_", " ")}</span>
+                        </div>
+                        <div style={{ color: "#7d8690", fontSize: "8px" }}>
+                          <span>Trigger: {run.triggerEvent?.replaceAll("_", " ")}</span>
+                          {run.targetStatus && <span> · Target: {run.targetStatus}</span>}
+                          {run.executedAt && <span> · {new Date(run.executedAt).toLocaleString("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>}
+                        </div>
+                        {run.proposalNotes && <div style={{ marginTop: "4px", fontStyle: "italic", color: "#6366f1" }}>{run.proposalNotes}</div>}
+                        {run.rejectionReason && <div style={{ marginTop: "4px", color: "#ef4444" }}>Reason: {run.rejectionReason}</div>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {taskActivity?.events?.length > 0 && (
+                <div>
+                  <div className="eyebrow" style={{ marginBottom: "6px" }}>LINKED GITHUB ACTIVITY ({taskActivity.events.length})</div>
+                  <div style={{ display: "grid", gap: "6px" }}>
+                    {taskActivity.events.map((evt: any) => (
+                      <div key={evt.id} style={{ padding: "8px 10px", border: "1px solid var(--line)", borderRadius: "6px", fontSize: "9px", background: "var(--surface)" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontWeight: 600, color: "var(--ink)" }}>{evt.repository}</span>
+                          <time style={{ color: "#9ba1a9", fontSize: "8px" }}>{new Date(evt.createdAt).toLocaleString("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</time>
+                        </div>
+                        <div style={{ color: "#7d8690", fontSize: "8.5px", marginTop: "2px" }}>
+                          Action: <b>{evt.action}</b> by @{evt.sender}
+                          {evt.payload?.pull_request?.title && (
+                            <div style={{ marginTop: "2px", color: "#475569" }}>
+                              PR #{evt.payload.pull_request.number}: {evt.payload.pull_request.title}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(!taskActivity?.runs?.length && !taskActivity?.events?.length) && (
+                <div className="comment-empty" style={{ minHeight: "120px" }}>
+                  <GitBranch size={17}/>
+                  <span>No GitHub activity linked yet. Include the task ref in your PR or commit.</span>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      </div>
+    )}
     {toast && <div className="toast"><span><Check size={14}/></span>{toast}</div>}
   </div>;
 }

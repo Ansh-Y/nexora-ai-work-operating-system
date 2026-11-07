@@ -1,21 +1,32 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { OrganizationRole, Prisma } from '@prisma/client';
+import { GitHubAutomationAction, GitHubAutomationExecutionMode, GitHubAutomationRunStatus, GitHubAutomationTrigger, OrganizationRole, Prisma, TaskStatus } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { Principal } from '../common/auth.types';
 import { decryptGithubSecret, encryptGithubSecret, hashGithubOAuthState, newGithubOAuthState, taskReference, verifyGithubSignature } from './github-security';
-import { LinkGitHubRepositoryDto } from './github.dto';
+import { CreateGitHubAutomationRuleDto, GitHubAutomationRulesQueryDto, GitHubAutomationRunsQueryDto, LinkGitHubRepositoryDto, UpdateGitHubAutomationRuleDto } from './github.dto';
 
 const API_HEADERS = { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'Nexora-Workspace' };
 type JsonRecord = Record<string, any>;
 
+const reviewers: OrganizationRole[] = [OrganizationRole.OWNER, OrganizationRole.ADMIN, OrganizationRole.PROJECT_MANAGER];
+
 @Injectable()
 export class GitHubService {
-  constructor(private prisma: PrismaService, private config: ConfigService) {}
+  constructor(
+    private prisma: PrismaService,
+    private config: ConfigService,
+    private realtime: RealtimeGateway,
+  ) {}
 
   private assertManager(user: Principal) {
     if (user.role !== OrganizationRole.OWNER && user.role !== OrganizationRole.ADMIN) throw new ForbiddenException('Workspace owners or admins must manage GitHub integration settings');
+  }
+
+  private assertReviewer(user: Principal) {
+    if (!reviewers.includes(user.role)) throw new ForbiddenException('Your workspace role cannot review automation proposals');
   }
 
   private oauthConfig() {
@@ -54,7 +65,6 @@ export class GitHubService {
   async beginConnection(user: Principal) {
     this.assertManager(user);
     const { clientId, callbackUrl } = this.oauthConfig();
-    // Fail before redirecting so a successful OAuth callback can never store an unusable plaintext token.
     if (!/^[\da-f]{64}$/i.test(this.encryptionKey() ?? '')) throw new ServiceUnavailableException('Configure GITHUB_TOKEN_ENCRYPTION_KEY as 64 hexadecimal characters before connecting GitHub.');
     const state = newGithubOAuthState();
     await this.prisma.gitHubOAuthState.deleteMany({ where: { organizationId: user.orgId, OR: [{ expiresAt: { lte: new Date() } }, { consumedAt: { not: null } }] } });
@@ -175,11 +185,362 @@ export class GitHubService {
     const secret = randomBytes(32).toString('hex');
     await this.prisma.gitHubRepository.update({ where: { id: repository.id }, data: { webhookSecretCiphertext: encryptGithubSecret(secret, this.encryptionKey()) } });
     await this.prisma.auditEvent.create({ data: { organizationId: user.orgId, actorType: 'USER', actorId: user.sub, action: 'github.webhook.secret_rotated', targetType: 'github_repository', targetId: repository.id, metadata: { fullName: repository.fullName } } });
-    return { webhookUrl: `${webhookBaseUrl}/api/integrations/github/webhook`, secret, events: ['push', 'pull_request', 'issues'] };
+    return { webhookUrl: `${webhookBaseUrl}/api/integrations/github/webhook`, secret, events: ['push', 'pull_request', 'issues', 'pull_request_review'] };
   }
 
   async events(user: Principal) {
     return this.prisma.gitHubEvent.findMany({ where: { organizationId: user.orgId }, orderBy: { occurredAt: 'desc' }, take: 100, include: { repository: { select: { id: true, fullName: true, project: { select: { id: true, name: true } } } }, linkedTask: { select: { id: true, title: true, status: true } } } });
+  }
+
+  async listRules(user: Principal, query?: GitHubAutomationRulesQueryDto) {
+    return this.prisma.gitHubAutomationRule.findMany({
+      where: {
+        organizationId: user.orgId,
+        ...(query?.repositoryId ? { repositoryId: query.repositoryId } : {}),
+        ...(query?.projectId ? { projectId: query.projectId } : {}),
+      },
+      include: {
+        repository: { select: { id: true, fullName: true } },
+        project: { select: { id: true, name: true } },
+        task: { select: { id: true, title: true, status: true } },
+        createdBy: { select: { id: true, name: true } },
+        _count: { select: { runs: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getRule(user: Principal, id: string) {
+    const rule = await this.prisma.gitHubAutomationRule.findFirst({
+      where: { id, organizationId: user.orgId },
+      include: {
+        repository: { select: { id: true, fullName: true } },
+        project: { select: { id: true, name: true } },
+        task: { select: { id: true, title: true, status: true } },
+        createdBy: { select: { id: true, name: true } },
+      },
+    });
+    if (!rule) throw new NotFoundException('Automation rule not found.');
+    return rule;
+  }
+
+  async createRule(user: Principal, dto: CreateGitHubAutomationRuleDto) {
+    this.assertManager(user);
+    if (dto.repositoryId) {
+      const repo = await this.prisma.gitHubRepository.findFirst({ where: { id: dto.repositoryId, organizationId: user.orgId } });
+      if (!repo) throw new NotFoundException('Repository not found in this workspace.');
+    }
+    if (dto.projectId) {
+      const project = await this.prisma.project.findFirst({ where: { id: dto.projectId, organizationId: user.orgId, archivedAt: null } });
+      if (!project) throw new NotFoundException('Project not found in this workspace.');
+    }
+    if (dto.taskId) {
+      const task = await this.prisma.task.findFirst({ where: { id: dto.taskId, organizationId: user.orgId } });
+      if (!task) throw new NotFoundException('Task not found in this workspace.');
+      if (dto.projectId && task.projectId !== dto.projectId) throw new BadRequestException('Target task must belong to the specified project.');
+    }
+
+    const action = dto.action ?? GitHubAutomationAction.TRANSITION_TASK_STATUS;
+    const targetStatus = action === GitHubAutomationAction.TRANSITION_TASK_STATUS ? (dto.targetStatus ?? TaskStatus.DONE) : undefined;
+    const executionMode = dto.executionMode ?? GitHubAutomationExecutionMode.AUTOMATIC;
+
+    const rule = await this.prisma.gitHubAutomationRule.create({
+      data: {
+        organizationId: user.orgId,
+        name: dto.name.trim(),
+        description: dto.description?.trim() ?? '',
+        triggerEvent: dto.triggerEvent,
+        action,
+        targetStatus,
+        executionMode,
+        conditions: (dto.conditions ?? {}) as Prisma.InputJsonValue,
+        isEnabled: dto.isEnabled ?? true,
+        repositoryId: dto.repositoryId ?? null,
+        projectId: dto.projectId ?? null,
+        taskId: dto.taskId ?? null,
+        createdById: user.sub,
+      },
+      include: {
+        repository: { select: { id: true, fullName: true } },
+        project: { select: { id: true, name: true } },
+        task: { select: { id: true, title: true, status: true } },
+      },
+    });
+
+    await this.prisma.auditEvent.create({
+      data: {
+        organizationId: user.orgId,
+        actorType: 'USER',
+        actorId: user.sub,
+        action: 'github.automation_rule.created',
+        targetType: 'github_automation_rule',
+        targetId: rule.id,
+        metadata: { name: rule.name, trigger: rule.triggerEvent, action: rule.action, executionMode: rule.executionMode },
+      },
+    });
+
+    return rule;
+  }
+
+  async updateRule(user: Principal, id: string, dto: UpdateGitHubAutomationRuleDto) {
+    this.assertManager(user);
+    const existing = await this.prisma.gitHubAutomationRule.findFirst({ where: { id, organizationId: user.orgId } });
+    if (!existing) throw new NotFoundException('Automation rule not found.');
+
+    if (dto.repositoryId) {
+      const repo = await this.prisma.gitHubRepository.findFirst({ where: { id: dto.repositoryId, organizationId: user.orgId } });
+      if (!repo) throw new NotFoundException('Repository not found in this workspace.');
+    }
+    if (dto.projectId) {
+      const project = await this.prisma.project.findFirst({ where: { id: dto.projectId, organizationId: user.orgId, archivedAt: null } });
+      if (!project) throw new NotFoundException('Project not found in this workspace.');
+    }
+    if (dto.taskId) {
+      const task = await this.prisma.task.findFirst({ where: { id: dto.taskId, organizationId: user.orgId } });
+      if (!task) throw new NotFoundException('Task not found in this workspace.');
+      const checkProjectId = dto.projectId ?? existing.projectId;
+      if (checkProjectId && task.projectId !== checkProjectId) throw new BadRequestException('Target task must belong to the specified project.');
+    }
+
+    const updated = await this.prisma.gitHubAutomationRule.update({
+      where: { id },
+      data: {
+        name: dto.name !== undefined ? dto.name.trim() : undefined,
+        description: dto.description !== undefined ? dto.description.trim() : undefined,
+        triggerEvent: dto.triggerEvent,
+        action: dto.action,
+        targetStatus: dto.targetStatus,
+        executionMode: dto.executionMode,
+        conditions: dto.conditions !== undefined ? (dto.conditions as Prisma.InputJsonValue) : undefined,
+        isEnabled: dto.isEnabled,
+        repositoryId: dto.repositoryId,
+        projectId: dto.projectId,
+        taskId: dto.taskId,
+        updatedById: user.sub,
+      },
+      include: {
+        repository: { select: { id: true, fullName: true } },
+        project: { select: { id: true, name: true } },
+        task: { select: { id: true, title: true, status: true } },
+      },
+    });
+
+    await this.prisma.auditEvent.create({
+      data: {
+        organizationId: user.orgId,
+        actorType: 'USER',
+        actorId: user.sub,
+        action: 'github.automation_rule.updated',
+        targetType: 'github_automation_rule',
+        targetId: updated.id,
+        metadata: { changed: Object.keys(dto) },
+      },
+    });
+
+    return updated;
+  }
+
+  async deleteRule(user: Principal, id: string) {
+    this.assertManager(user);
+    const existing = await this.prisma.gitHubAutomationRule.findFirst({ where: { id, organizationId: user.orgId }, select: { id: true, name: true } });
+    if (!existing) throw new NotFoundException('Automation rule not found.');
+
+    await this.prisma.$transaction(async tx => {
+      await tx.gitHubAutomationRule.delete({ where: { id } });
+      await tx.auditEvent.create({
+        data: {
+          organizationId: user.orgId,
+          actorType: 'USER',
+          actorId: user.sub,
+          action: 'github.automation_rule.deleted',
+          targetType: 'github_automation_rule',
+          targetId: id,
+          metadata: { name: existing.name },
+        },
+      });
+    });
+
+    return { deleted: true };
+  }
+
+  async toggleRule(user: Principal, id: string) {
+    this.assertManager(user);
+    const existing = await this.prisma.gitHubAutomationRule.findFirst({ where: { id, organizationId: user.orgId } });
+    if (!existing) throw new NotFoundException('Automation rule not found.');
+
+    const updated = await this.prisma.gitHubAutomationRule.update({
+      where: { id },
+      data: { isEnabled: !existing.isEnabled, updatedById: user.sub },
+    });
+
+    await this.prisma.auditEvent.create({
+      data: {
+        organizationId: user.orgId,
+        actorType: 'USER',
+        actorId: user.sub,
+        action: 'github.automation_rule.toggled',
+        targetType: 'github_automation_rule',
+        targetId: id,
+        metadata: { isEnabled: updated.isEnabled },
+      },
+    });
+
+    return updated;
+  }
+
+  async listRuns(user: Principal, query?: GitHubAutomationRunsQueryDto) {
+    return this.prisma.gitHubAutomationRun.findMany({
+      where: {
+        organizationId: user.orgId,
+        ...(query?.status ? { status: query.status } : {}),
+        ...(query?.ruleId ? { ruleId: query.ruleId } : {}),
+        ...(query?.taskId ? { taskId: query.taskId } : {}),
+      },
+      include: {
+        rule: { select: { id: true, name: true } },
+        task: { select: { id: true, title: true, status: true, projectId: true } },
+        event: { select: { id: true, eventType: true, action: true, title: true, url: true, branch: true } },
+        reviewedBy: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+  }
+
+  async approveRun(user: Principal, id: string) {
+    this.assertReviewer(user);
+    const run = await this.prisma.gitHubAutomationRun.findFirst({
+      where: { id, organizationId: user.orgId },
+      include: { task: true, rule: true },
+    });
+    if (!run) throw new NotFoundException('Automation run not found.');
+    if (run.status !== GitHubAutomationRunStatus.PENDING_APPROVAL) throw new BadRequestException('This automation run has already been processed.');
+
+    const targetTaskId = run.taskId;
+    const targetTask = targetTaskId ? await this.prisma.task.findFirst({ where: { id: targetTaskId, organizationId: user.orgId } }) : null;
+    if (targetTaskId && !targetTask) throw new NotFoundException('Target task for this automation run no longer exists.');
+
+    await this.prisma.$transaction(async tx => {
+      if (targetTask && run.action === GitHubAutomationAction.TRANSITION_TASK_STATUS && run.targetStatus) {
+        if (targetTask.status !== run.targetStatus) {
+          await tx.task.update({
+            where: { id: targetTask.id },
+            data: {
+              status: run.targetStatus,
+              completedAt: run.targetStatus === TaskStatus.DONE ? new Date() : (run.targetStatus ? null : undefined),
+            },
+          });
+          await tx.auditEvent.create({
+            data: {
+              organizationId: user.orgId,
+              actorType: 'USER',
+              actorId: user.sub,
+              action: 'task.updated',
+              targetType: 'task',
+              targetId: targetTask.id,
+              metadata: { via: 'github_automation_approval', runId: run.id, from: targetTask.status, to: run.targetStatus },
+            },
+          });
+        }
+      }
+
+      await tx.gitHubAutomationRun.update({
+        where: { id: run.id },
+        data: {
+          status: GitHubAutomationRunStatus.EXECUTED,
+          reviewedById: user.sub,
+          reviewedAt: new Date(),
+          executedAt: new Date(),
+        },
+      });
+
+      await tx.gitHubAutomationRule.update({
+        where: { id: run.ruleId },
+        data: {
+          lastExecutedAt: new Date(),
+          lastExecutionStatus: GitHubAutomationRunStatus.EXECUTED,
+        },
+      });
+
+      await tx.auditEvent.create({
+        data: {
+          organizationId: user.orgId,
+          actorType: 'USER',
+          actorId: user.sub,
+          action: 'github.automation.approved',
+          targetType: 'github_automation_run',
+          targetId: run.id,
+          metadata: { ruleId: run.ruleId, taskId: targetTaskId, targetStatus: run.targetStatus },
+        },
+      });
+    });
+
+    if (targetTask) {
+      this.realtime.broadcast(user.orgId, 'project.updated', { projectId: targetTask.projectId, action: 'updated' });
+    }
+
+    return { approved: true, runId: run.id, targetStatus: run.targetStatus };
+  }
+
+  async rejectRun(user: Principal, id: string) {
+    this.assertReviewer(user);
+    const run = await this.prisma.gitHubAutomationRun.findFirst({
+      where: { id, organizationId: user.orgId },
+    });
+    if (!run) throw new NotFoundException('Automation run not found.');
+    if (run.status !== GitHubAutomationRunStatus.PENDING_APPROVAL) throw new BadRequestException('This automation run has already been processed.');
+
+    await this.prisma.$transaction(async tx => {
+      await tx.gitHubAutomationRun.update({
+        where: { id: run.id },
+        data: {
+          status: GitHubAutomationRunStatus.REJECTED,
+          reviewedById: user.sub,
+          reviewedAt: new Date(),
+        },
+      });
+
+      await tx.gitHubAutomationRule.update({
+        where: { id: run.ruleId },
+        data: {
+          lastExecutionStatus: GitHubAutomationRunStatus.REJECTED,
+        },
+      });
+
+      await tx.auditEvent.create({
+        data: {
+          organizationId: user.orgId,
+          actorType: 'USER',
+          actorId: user.sub,
+          action: 'github.automation.rejected',
+          targetType: 'github_automation_run',
+          targetId: run.id,
+          metadata: { ruleId: run.ruleId },
+        },
+      });
+    });
+
+    return { rejected: true, runId: run.id };
+  }
+
+  async taskActivity(user: Principal, taskId: string) {
+    const task = await this.prisma.task.findFirst({ where: { id: taskId, organizationId: user.orgId }, select: { id: true, title: true, projectId: true } });
+    if (!task) throw new NotFoundException('Task not found.');
+
+    const [events, runs] = await Promise.all([
+      this.prisma.gitHubEvent.findMany({
+        where: { linkedTaskId: taskId, organizationId: user.orgId },
+        orderBy: { occurredAt: 'desc' },
+        include: { repository: { select: { id: true, fullName: true } } },
+      }),
+      this.prisma.gitHubAutomationRun.findMany({
+        where: { taskId, organizationId: user.orgId },
+        orderBy: { createdAt: 'desc' },
+        include: { rule: { select: { id: true, name: true } }, reviewedBy: { select: { id: true, name: true } } },
+      }),
+    ]);
+
+    return { taskId, events, runs };
   }
 
   async handleWebhook(headers: { event?: string; delivery?: string; signature?: string }, rawBody: Buffer, payload: JsonRecord) {
@@ -195,17 +556,228 @@ export class GitHubService {
     if (!info) return { accepted: true, ignored: true };
     const taskRef = taskReference(`${info.title ?? ''}\n${info.summary ?? ''}`);
     const linkedTask = taskRef ? await this.prisma.task.findFirst({ where: { id: taskRef, organizationId: match.organizationId, projectId: match.projectId }, select: { id: true } }) : null;
+
+    let event: { id: string };
     try {
-      const event = await this.prisma.$transaction(async tx => {
+      event = await this.prisma.$transaction(async tx => {
         const created = await tx.gitHubEvent.create({ data: { organizationId: match.organizationId, repositoryId: match.id, githubDeliveryId: headers.delivery!, eventType: headers.event!, action: info.action, number: info.number, title: info.title, url: info.url, summary: info.summary, branch: info.branch, commitSha: info.commitSha, linkedTaskId: linkedTask?.id, occurredAt: info.occurredAt } });
         await tx.auditEvent.create({ data: { organizationId: match.organizationId, actorType: 'SYSTEM', action: 'github.webhook.received', targetType: 'github_event', targetId: created.id, metadata: { repository: match.fullName, eventType: headers.event, action: info.action, linkedTaskId: linkedTask?.id ?? null } } });
         return created;
       });
-      return { accepted: true, duplicate: false, eventId: event.id, linkedTaskId: linkedTask?.id ?? null };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return { accepted: true, duplicate: true };
       throw error;
     }
+
+    const trigger = this.determineTrigger(headers.event, payload);
+    const automationRuns: Array<{ id: string; ruleName: string; status: string; targetStatus?: TaskStatus | null }> = [];
+
+    if (trigger) {
+      const rules = await this.prisma.gitHubAutomationRule.findMany({
+        where: {
+          organizationId: match.organizationId,
+          isEnabled: true,
+          triggerEvent: trigger,
+          OR: [{ repositoryId: null }, { repositoryId: match.id }],
+          AND: [{ OR: [{ projectId: null }, { projectId: match.projectId }] }],
+        },
+        include: {
+          task: { select: { id: true, title: true, status: true, projectId: true } },
+        },
+      });
+
+      for (const rule of rules) {
+        try {
+          const conditions = (rule.conditions && typeof rule.conditions === 'object' && !Array.isArray(rule.conditions)) ? rule.conditions as Record<string, any> : {};
+          if (conditions.branch && typeof conditions.branch === 'string' && conditions.branch.trim()) {
+            const branchFilter = conditions.branch.trim().toLowerCase();
+            const eventBranch = (info.branch || payload.pull_request?.head?.ref || '').toLowerCase();
+            if (eventBranch !== branchFilter && !eventBranch.includes(branchFilter)) continue;
+          }
+          if (conditions.baseBranch && typeof conditions.baseBranch === 'string' && conditions.baseBranch.trim()) {
+            const baseBranchFilter = conditions.baseBranch.trim().toLowerCase();
+            const eventBase = (payload.pull_request?.base?.ref || '').toLowerCase();
+            if (eventBase !== baseBranchFilter) continue;
+          }
+
+          let targetTask = rule.task;
+          if (!targetTask && linkedTask?.id) {
+            targetTask = await this.prisma.task.findFirst({
+              where: { id: linkedTask.id, organizationId: match.organizationId, projectId: match.projectId },
+              select: { id: true, title: true, status: true, projectId: true },
+            });
+          }
+
+          if (rule.action === GitHubAutomationAction.TRANSITION_TASK_STATUS && !targetTask) continue;
+
+          // Prevent redundant loops if already in target state
+          if (targetTask && rule.action === GitHubAutomationAction.TRANSITION_TASK_STATUS && targetTask.status === rule.targetStatus) continue;
+
+          const duplicateRun = await this.prisma.gitHubAutomationRun.findFirst({
+            where: { ruleId: rule.id, eventId: event.id, ...(targetTask ? { taskId: targetTask.id } : {}) },
+          });
+          if (duplicateRun) continue;
+
+          if (rule.executionMode === GitHubAutomationExecutionMode.APPROVAL_REQUIRED) {
+            const run = await this.prisma.gitHubAutomationRun.create({
+              data: {
+                organizationId: match.organizationId,
+                ruleId: rule.id,
+                eventId: event.id,
+                taskId: targetTask?.id ?? null,
+                triggerEvent: trigger,
+                action: rule.action,
+                targetStatus: rule.targetStatus,
+                status: GitHubAutomationRunStatus.PENDING_APPROVAL,
+                executionMode: GitHubAutomationExecutionMode.APPROVAL_REQUIRED,
+                explanation: `GitHub event "${info.title || headers.event}" matches rule "${rule.name}". Proposing ${rule.action === 'TRANSITION_TASK_STATUS' ? `transitioning "${targetTask?.title}" from ${targetTask?.status} to ${rule.targetStatus}` : 'action'}.`,
+                payloadSummary: {
+                  eventType: headers.event,
+                  action: info.action,
+                  number: info.number,
+                  branch: info.branch,
+                  title: info.title,
+                  url: info.url,
+                  taskTitle: targetTask?.title,
+                  fromStatus: targetTask?.status,
+                  toStatus: rule.targetStatus,
+                },
+              },
+            });
+
+            await this.prisma.auditEvent.create({
+              data: {
+                organizationId: match.organizationId,
+                actorType: 'SYSTEM',
+                action: 'github.automation.proposed',
+                targetType: 'github_automation_run',
+                targetId: run.id,
+                metadata: { ruleName: rule.name, trigger, taskId: targetTask?.id, proposedStatus: rule.targetStatus },
+              },
+            });
+
+            automationRuns.push({ id: run.id, ruleName: rule.name, status: run.status, targetStatus: run.targetStatus });
+          } else {
+            // AUTOMATIC mode
+            await this.prisma.$transaction(async tx => {
+              if (targetTask && rule.action === GitHubAutomationAction.TRANSITION_TASK_STATUS && rule.targetStatus) {
+                await tx.task.update({
+                  where: { id: targetTask.id },
+                  data: {
+                    status: rule.targetStatus,
+                    completedAt: rule.targetStatus === TaskStatus.DONE ? new Date() : (rule.targetStatus ? null : undefined),
+                  },
+                });
+                await tx.auditEvent.create({
+                  data: {
+                    organizationId: match.organizationId,
+                    actorType: 'SYSTEM',
+                    action: 'task.updated',
+                    targetType: 'task',
+                    targetId: targetTask.id,
+                    metadata: { via: 'github_automation', ruleName: rule.name, from: targetTask.status, to: rule.targetStatus },
+                  },
+                });
+              }
+
+              const run = await tx.gitHubAutomationRun.create({
+                data: {
+                  organizationId: match.organizationId,
+                  ruleId: rule.id,
+                  eventId: event.id,
+                  taskId: targetTask?.id ?? null,
+                  triggerEvent: trigger,
+                  action: rule.action,
+                  targetStatus: rule.targetStatus,
+                  status: GitHubAutomationRunStatus.EXECUTED,
+                  executionMode: GitHubAutomationExecutionMode.AUTOMATIC,
+                  explanation: `Rule "${rule.name}" automatically executed ${rule.action === 'TRANSITION_TASK_STATUS' ? `transitioning "${targetTask?.title}" to ${rule.targetStatus}` : 'action'} based on GitHub event "${info.title || headers.event}".`,
+                  executedAt: new Date(),
+                  payloadSummary: {
+                    eventType: headers.event,
+                    action: info.action,
+                    number: info.number,
+                    branch: info.branch,
+                    title: info.title,
+                    url: info.url,
+                    taskTitle: targetTask?.title,
+                    fromStatus: targetTask?.status,
+                    toStatus: rule.targetStatus,
+                  },
+                },
+              });
+
+              await tx.gitHubAutomationRule.update({
+                where: { id: rule.id },
+                data: {
+                  lastExecutedAt: new Date(),
+                  lastExecutionStatus: GitHubAutomationRunStatus.EXECUTED,
+                },
+              });
+
+              await tx.auditEvent.create({
+                data: {
+                  organizationId: match.organizationId,
+                  actorType: 'SYSTEM',
+                  action: 'github.automation.executed',
+                  targetType: 'github_automation_rule',
+                  targetId: rule.id,
+                  metadata: { ruleName: rule.name, trigger, taskId: targetTask?.id, targetStatus: rule.targetStatus },
+                },
+              });
+
+              automationRuns.push({ id: run.id, ruleName: rule.name, status: run.status, targetStatus: run.targetStatus });
+            });
+
+            if (targetTask) {
+              this.realtime.broadcast(match.organizationId, 'project.updated', { projectId: targetTask.projectId, action: 'updated' });
+            }
+          }
+        } catch (ruleError) {
+          await this.prisma.gitHubAutomationRun.create({
+            data: {
+              organizationId: match.organizationId,
+              ruleId: rule.id,
+              eventId: event.id,
+              triggerEvent: trigger,
+              action: rule.action,
+              targetStatus: rule.targetStatus,
+              status: GitHubAutomationRunStatus.FAILED,
+              executionMode: rule.executionMode,
+              errorMessage: (ruleError as Error).message,
+              explanation: `Rule execution failed: ${(ruleError as Error).message}`,
+            },
+          }).catch(() => undefined);
+        }
+      }
+    }
+
+    return { accepted: true, duplicate: false, eventId: event.id, linkedTaskId: linkedTask?.id ?? null, automations: automationRuns };
+  }
+
+  determineTrigger(eventType: string, payload: JsonRecord): GitHubAutomationTrigger | null {
+    if (eventType === 'pull_request') {
+      const action = payload.action;
+      if (action === 'opened') return GitHubAutomationTrigger.PULL_REQUEST_OPENED;
+      if (action === 'synchronize' || action === 'edited') return GitHubAutomationTrigger.PULL_REQUEST_UPDATED;
+      if (action === 'closed') {
+        return payload.pull_request?.merged === true ? GitHubAutomationTrigger.PULL_REQUEST_MERGED : GitHubAutomationTrigger.PULL_REQUEST_CLOSED;
+      }
+    }
+    if (eventType === 'pull_request_review') {
+      const action = payload.action;
+      const state = String(payload.review?.state || '').toLowerCase();
+      if (action === 'submitted' && state === 'approved') return GitHubAutomationTrigger.PULL_REQUEST_APPROVED;
+    }
+    if (eventType === 'issues') {
+      const action = payload.action;
+      if (action === 'opened') return GitHubAutomationTrigger.ISSUE_OPENED;
+      if (action === 'closed') return GitHubAutomationTrigger.ISSUE_CLOSED;
+    }
+    if (eventType === 'push') {
+      return GitHubAutomationTrigger.COMMIT_PUSHED;
+    }
+    return null;
   }
 
   private eventSummary(eventType: string, payload: JsonRecord) {
@@ -214,6 +786,11 @@ export class GitHubService {
     if (eventType === 'pull_request' && payload.pull_request) {
       const pr = payload.pull_request;
       return { action: short(payload.action, 80), number: Number.isInteger(pr.number) ? pr.number : null, title: short(pr.title, 300), url: short(pr.html_url, 1000), summary: short(pr.body), branch: short(pr.head?.ref, 200), commitSha: short(pr.head?.sha, 100), occurredAt: date(pr.updated_at) };
+    }
+    if (eventType === 'pull_request_review' && payload.pull_request) {
+      const pr = payload.pull_request;
+      const review = payload.review;
+      return { action: short(payload.action, 80), number: Number.isInteger(pr.number) ? pr.number : null, title: short(`Review: ${pr.title}`, 300), url: short(review?.html_url || pr.html_url, 1000), summary: short(review?.body || pr.body), branch: short(pr.head?.ref, 200), commitSha: short(pr.head?.sha, 100), occurredAt: date(review?.submitted_at || pr.updated_at) };
     }
     if (eventType === 'issues' && payload.issue) {
       const issue = payload.issue;
