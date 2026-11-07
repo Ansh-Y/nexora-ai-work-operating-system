@@ -179,4 +179,45 @@ Additive migration `20261107123000_storage_and_retention_management` was applied
 - **Observability & Recovery**: Failed queue additions emit `storage.retention_sweep.enqueue_failed` and track target workspaces in `pendingOfflineSweeps`. When Redis connectivity restores, `resumePendingSweeps()` automatically drains and enqueues deferred sweeps.
 - **Deduplication & Mutual Exclusion**: BullMQ jobs use deterministic job IDs (`retention-sweep-${target}`). An internal `isSweeping` mutex prevents concurrent duplicate sweep executions from running simultaneously.
 
+## Release 3 Step 3 — Google Workspace Integration (Google Calendar Sync & Gmail Intelligence) (2026-11-07)
+
+Release 3 Step 3 extends the NEXORA workspace with official Google Workspace connectivity for Google Calendar and Gmail intelligence, adhering strictly to tenant isolation, AES-256-GCM authenticated credential encryption, and human-in-the-loop AI governance.
+
+### 1. Database Schema & Additive Migration
+Additive migration `20261107130000_google_workspace_integration` was applied to the active database `nexora` (12 migrations total):
+- `GoogleOAuthState`: High-entropy 32-byte cryptographic state token, SHA-256 state hash, single-use consumed tracking, 10-minute expiry window, scoped to organization and initiating admin.
+- `GoogleConnection`: Tenant-unique connection storing encrypted access and refresh tokens, token expiration timestamps, authorized scopes, sync tokens for incremental Calendar synchronization, and sync health metrics.
+- `GoogleCalendarEvent`: Stores imported Google Calendar events with start/end timestamps, all-day flag, status (`confirmed`, `tentative`, `cancelled`), attendees, HTML link, project associations, and AI project suggestion metadata.
+- `GmailMessage`: Stores synchronized message metadata (Subject, From, To, Date, snippet, labels) and project suggestion references without persisting full email bodies or sensitive tokens.
+
+### 2. Google OAuth 2.0 Security Architecture
+- **CSRF & State Security**: Generates cryptographically secure 32-byte base64url state values. Only the SHA-256 digest is stored in the database. Callbacks atomically claim states with `consumedAt: now`, rejecting expired or replayed state tokens.
+- **AES-256-GCM Token Encryption**: Access and refresh tokens are encrypted using AES-256-GCM (`v1.<iv>.<tag>.<ciphertext>`) using a 64-hexadecimal-character key (`GOOGLE_TOKEN_ENCRYPTION_KEY` or `GITHUB_TOKEN_ENCRYPTION_KEY`). Plaintext tokens are never stored, logged, or returned via the API.
+- **Automatic Token Refresh**: Tokens nearing expiry (<60 seconds) are automatically refreshed against Google's token endpoint (`grant_type=refresh_token`).
+- **Revocation & Invalid Grant Handling**: If a user revokes permissions in Google Security or refresh tokens expire, HTTP 400/401 `invalid_grant` errors cleanly transition the connection status to `REVOKED`, emit audit log `google.token.revoked`, and require explicit re-authentication.
+- **Access Control (RBAC)**: Only workspace `OWNER` or `ADMIN` roles can initiate OAuth connections or disconnect accounts.
+
+### 3. Google Calendar Synchronization & Intelligence
+- **Incremental & Full Synchronization**: Supports both incremental synchronization via Google `syncToken` and bounded full resynchronization.
+- **Invalid Sync Token Recovery (HTTP 410 Gone)**: When Google reports an expired sync token (HTTP 410), the service automatically clears the stored token, logs a recovery event, and seamlessly executes a full sync.
+- **Timezone & All-Day Handling**: Distinguishes between `start.dateTime` (ISO timed events) and `start.date` (all-day events), converting cleanly to UTC timestamps.
+- **Deduplication & Cancellation**: Upserts on `[organizationId, googleEventId]`. Cancelled events in Google Calendar update local records to `cancelled` without breaking schedules.
+- **Calendar-to-Workspace Intelligence**: Automatically scans event summaries and descriptions against workspace project titles, suggesting associations. Managers can accept suggestions, link events to projects, and automatically create tracked `Meeting` records.
+- **Workspace Schedule Unification**: `CalendarService.events` includes imported Google events directly, making them immediately visible in Month, Week, Day, and Timeline views.
+
+### 4. Gmail Intelligence & Task Proposals
+- **Metadata-Only Ingestion**: Only message headers (`Subject`, `From`, `To`, `Date`) and short snippets are synchronized. Full email bodies and tokens are never written to public logs or insecure storage.
+- **Human-in-the-Loop Task Proposals**: Actions extracted from emails generate an `AiProposal` (`kind: 'PROJECT_PLAN'`). Tasks are never created automatically without explicit review and approval by an authorized workspace manager.
+- **Deterministic Heuristic Fallback**: In the absence of an OpenAI API key, a deterministic heuristic extractor identifies urgency keywords and suggests action items with clear source citations.
+
+### 5. Full Test Verification
+| Command | Result |
+|---|---|
+| `npm run build` | Passed: NestJS API and Next.js frontend built cleanly with 0 errors |
+| `npm test` | Passed: 10 test suites, 65 tests (including 15 Google Workspace security, OAuth, Calendar sync, and Gmail intelligence tests); frontend ESLint clean |
+| `npm run test:e2e` | Passed: 4 E2E test suites, 28 tests on isolated database |
+| `npm run test:browser` | Passed: 1 Playwright browser journey |
+| `npm audit --omit=dev` | Passed: 0 vulnerabilities |
+
+
 

@@ -39,7 +39,7 @@ See `apps/api/prisma/schema.prisma` for the canonical relational model. The sche
 - `audit`: append-only record creation and tenant-scoped listing.
 - `common`: auth/role guards, validation, request context and errors.
 
-Meeting recordings are stored in private local files by default; configure `MEETING_STORAGE_DIR` and restrict access to the API process. Hosted object storage and retention controls remain future work. Transcription and analysis require provider credentials. GitHub uses one-time tenant-bound OAuth state, AES-256-GCM encrypted tokens, repository-to-project links, signed webhooks and explicit task references; configure the GitHub OAuth app and encryption key before connecting. Google Calendar/Gmail OAuth sync remains unimplemented. Credentials are never required to start core local development.
+Meeting recordings are stored in private local files by default; configure `MEETING_STORAGE_DIR` and restrict access to the API process. Hosted object storage and retention controls are supported via modular LocalStorageProvider and S3CompatibleStorageProvider with retention policies and legal holds. Transcription and analysis require provider credentials. GitHub uses one-time tenant-bound OAuth state, AES-256-GCM encrypted tokens, repository-to-project links, signed webhooks and explicit task references. Google Workspace uses one-time tenant-bound OAuth state, AES-256-GCM encrypted access and refresh tokens, Google Calendar incremental sync with sync-token recovery, and Gmail context extraction with human-in-the-loop task proposals. Credentials are never required to start core local development.
 
 ## Security and reliability decisions
 
@@ -63,7 +63,7 @@ Meeting recordings are stored in private local files by default; configure `MEET
 | 5 | AI planning, blocker analysis, duplicate detection | Core flows complete; cited workspace Q&A and portfolio risk signals added; duplicate detection remains lexical |
 | 6 | Meeting processing and semantic search | Meeting CRUD, private audio upload (local & S3), queued transcription/analysis, transcript-grounded decisions/actions, and GitHub event search sources; broader activity indexing pending |
 | 7 | Approval workflows and audit logs | AI plan and meeting action review, expiry, repeat-execution protection, storage retention policies/holds, and immutable audit events implemented |
-| 8 | GitHub, Storage, Calendar, Gmail | GitHub OAuth, repository linking, automation rules, and private cloud storage (local/S3 with retention policies & legal holds) implemented; Google Calendar/Gmail sync pending |
+| 8 | GitHub, Storage, Calendar, Gmail | GitHub OAuth, repository linking, automation rules, private cloud storage (local/S3 with retention policies & legal holds), and Google Workspace (Calendar sync & Gmail intelligence) implemented |
 | 9 | Automated tests, hardening, deployment | Unit, disposable-database HTTP security/workflow, Chromium browser journey and backup/restore rehearsal run locally; production hardening/deployment automation pending |
 
 ## Risks and open constraints

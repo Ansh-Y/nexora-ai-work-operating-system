@@ -15,12 +15,13 @@ import { MeetingsModule } from './meetings/meetings.module';
 import { CalendarModule } from './calendar/calendar.module';
 import { GitHubModule } from './github/github.module';
 import { StorageModule } from './storage/storage.module';
+import { GoogleModule } from './google/google.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['../../.env', '.env'] }),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 120 }]),
-    PrismaModule, AuditModule, AuthModule, OrganizationsModule, ProjectsModule, TasksModule, AiModule, SearchModule, NotificationsModule, MeetingsModule, CalendarModule, GitHubModule, StorageModule,
+    PrismaModule, AuditModule, AuthModule, OrganizationsModule, ProjectsModule, TasksModule, AiModule, SearchModule, NotificationsModule, MeetingsModule, CalendarModule, GitHubModule, StorageModule, GoogleModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

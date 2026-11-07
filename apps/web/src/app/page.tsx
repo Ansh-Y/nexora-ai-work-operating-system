@@ -9,6 +9,7 @@ import MeetingsWorkspace from "./MeetingsWorkspace";
 import CalendarWorkspace from "./CalendarWorkspace";
 import GitHubIntegration from "./GitHubIntegration";
 import StorageManagement from "./StorageManagement";
+import GoogleWorkspaceIntegration from "./GoogleWorkspaceIntegration";
 
 type User = { id: string; name: string; email: string };
 type Workspace = { id: string; name: string; role: string };
@@ -96,6 +97,20 @@ export default function Home() {
     const result = new URLSearchParams(window.location.search).get("github");
     if (!result) return;
     notify(result === "connected" ? "GitHub connected. Link a repository from Settings." : result === "cancelled" ? "GitHub authorization was cancelled." : "GitHub could not be connected. Check the integration configuration and try again.");
+    window.history.replaceState({}, "", window.location.pathname);
+  }, [token, notify]);
+
+  useEffect(() => {
+    if (!token) return;
+    const googleResult = new URLSearchParams(window.location.search).get("google");
+    if (!googleResult) return;
+    notify(
+      googleResult === "connected"
+        ? "Google Workspace connected. Calendar and Gmail sync enabled."
+        : googleResult === "cancelled"
+        ? "Google authorization was cancelled."
+        : "Google Workspace could not be connected. Check configuration and try again."
+    );
     window.history.replaceState({}, "", window.location.pathname);
   }, [token, notify]);
   const handleError = (e: unknown) => { setError(e instanceof ApiError ? e.message : "Something went wrong. Please try again."); };
@@ -365,6 +380,7 @@ export default function Home() {
         {page === "Settings" && <><div className="welcome-row compact-welcome"><div><div className="eyebrow">WORKSPACE PREFERENCES</div><h1>Settings</h1><p className="page-subtitle">Manage your team, connections, and the way Nexora looks.</p></div></div><div className="settings-layout"><div className="settings-nav"><button className="selected"><Users size={15}/> Members</button><button onClick={() => notify("Integration connections can be enabled after OAuth credentials are configured.")}><GitBranch size={15}/> Integrations</button><button onClick={toggleTheme}><Zap size={15}/> Appearance <span>{dark ? "Dark" : "Light"}</span></button><button onClick={() => notify("Security settings are managed by workspace owners.")}><ShieldCheck size={15}/> Security</button></div><div className="settings-content"><section className="panel settings-panel"><div className="panel-head"><div><div className="eyebrow">YOUR TEAM</div><h2>Workspace members</h2></div><button className="button button-primary small-button" onClick={() => { setInviteLink(""); setModal("invite"); }}><Plus size={14}/> Invite member</button></div><div className="member-list">{members.map((m, i) => <div className="member-row" key={m.id}><div className="person-avatar" style={{ background: avatarColors[i % avatarColors.length] }}>{initials(m.user.name)}</div><span><b>{m.user.name}</b><small>{m.user.email}</small></span><span className="role-chip">{m.role.toLowerCase().replaceAll("_", " ")}</span></div>)}{!members.length && <div className="empty-inline">Members will appear after the workspace loads.</div>}</div><div className="settings-hint"><ShieldCheck size={15}/><span>Roles are checked on the server for every write. Invitations are created securely; email delivery needs SMTP configuration.</span></div></section><section className="panel settings-panel"><div className="panel-head"><div><div className="eyebrow">CONNECTED TOOLS</div><h2>Integrations</h2></div><span className="status-tag planning">SETUP</span></div><div className="integration-row"><div className="integration-icon github-mark">GH</div><span><b>GitHub</b><small>Repository activity and pull requests</small></span><span className="integration-status">Not connected</span><button className="button button-secondary small-button" onClick={() => notify("GitHub OAuth requires GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET")}>Configure</button></div><div className="integration-row"><div className="integration-icon google-mark">G</div><span><b>Google Calendar</b><small>Project meetings and schedules</small></span><span className="integration-status">Not connected</span><button className="button button-secondary small-button" onClick={() => notify("Google OAuth requires GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET")}>Configure</button></div><div className="integration-row"><div className="integration-icon gmail-mark"><MessageSquare size={15}/></div><span><b>Gmail</b><small>Authorized email context</small></span><span className="integration-status">Not connected</span><button className="button button-secondary small-button" onClick={() => notify("Gmail access requires configured Google OAuth scopes")}>Configure</button></div></section><section className="panel settings-panel appearance-panel"><div><div className="eyebrow">PERSONALIZATION</div><h2>Appearance</h2><p>Choose a comfortable theme for your workspace.</p></div><button className={`theme-switch ${dark ? "on" : ""}`} onClick={toggleTheme}><i/>{dark ? "Dark mode" : "Light mode"}</button></section></div></div></>}
         {page === "Settings" && <GitHubIntegration projects={projects} canManage={workspace?.role === "OWNER" || workspace?.role === "ADMIN"} notify={notify}/>}
         {page === "Settings" && <StorageManagement projects={projects} canManage={workspace?.role === "OWNER" || workspace?.role === "ADMIN"} notify={notify}/>}
+        {page === "Settings" && <GoogleWorkspaceIntegration projects={projects} canManage={workspace?.role === "OWNER" || workspace?.role === "ADMIN"} notify={notify}/>}
       </div>
     </main>
 

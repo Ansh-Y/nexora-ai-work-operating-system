@@ -160,6 +160,8 @@ model User {
   reviewedGitHubRuns        GitHubAutomationRun[]  @relation("GitHubRunReviewer")
   appliedHolds              FileRetentionHold[]    @relation("HoldApplier")
   releasedHolds             FileRetentionHold[]    @relation("HoldReleaser")
+  googleConnections         GoogleConnection[]   @relation("GoogleConnectionOwner")
+  googleOAuthStates         GoogleOAuthState[]
 }
 
 model Organization {
@@ -197,6 +199,10 @@ model Organization {
   storageObjects        StorageObject[]
   retentionPolicy       OrganizationRetentionPolicy?
   fileRetentionHolds    FileRetentionHold[]
+  googleConnection      GoogleConnection?
+  googleOAuthStates     GoogleOAuthState[]
+  googleCalendarEvents  GoogleCalendarEvent[]
+  gmailMessages         GmailMessage[]
 }
 
 model RefreshSession {
@@ -263,6 +269,10 @@ model Project {
   githubRepositories GitHubRepository[]
   documents          Document[]
   gitHubAutomationRules GitHubAutomationRule[]
+  googleCalendarEvents    GoogleCalendarEvent[]
+  suggestedCalendarEvents GoogleCalendarEvent[] @relation("SuggestedCalendarProject")
+  gmailMessages           GmailMessage[]
+  suggestedGmailMessages  GmailMessage[]        @relation("SuggestedGmailProject")
 
   @@index([organizationId, status])
   @@index([organizationId, updatedAt])
@@ -381,6 +391,7 @@ model Meeting {
   segments            TranscriptSegment[]
   decisionsEvidence   MeetingDecision[]
   actionItemsReview   MeetingActionItem[]
+  googleCalendarEvents GoogleCalendarEvent[] @relation("GoogleMeetingLink")
 
   @@index([organizationId, startsAt])
   @@index([organizationId, archivedAt, startsAt])
@@ -807,4 +818,116 @@ model FileRetentionHold {
   @@index([organizationId, storageObjectId])
   @@index([storageObjectId, releasedAt])
 }
+
+model GoogleOAuthState {
+  stateHash      String       @id
+  organizationId String       @db.Uuid
+  userId         String       @db.Uuid
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@index([organizationId, userId, createdAt])
+}
+
+model GoogleConnection {
+  id                     String                @id @default(uuid()) @db.Uuid
+  organizationId         String                @unique @db.Uuid
+  connectedById          String                @db.Uuid
+  googleUserId           String
+  googleEmail            String
+  accessTokenCiphertext  String
+  refreshTokenCiphertext String?
+  tokenExpiresAt         DateTime?
+  scopes                 String[]              @default([])
+  status                 String                @default("CONNECTED") // "CONNECTED" | "NEEDS_REAUTH" | "REVOKED"
+  calendarSyncToken      String?
+  lastCalendarSyncAt     DateTime?
+  calendarSyncStatus     String                @default("IDLE") // "IDLE" | "SYNCING" | "SUCCESS" | "FAILED"
+  calendarSyncError      String?
+  gmailHistoryId         String?
+  lastGmailSyncAt        DateTime?
+  gmailSyncStatus        String                @default("IDLE") // "IDLE" | "SYNCING" | "SUCCESS" | "FAILED"
+  gmailSyncError         String?
+  metadata               Json                  @default("{}")
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+
+  organization           Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connectedBy            User                  @relation("GoogleConnectionOwner", fields: [connectedById], references: [id])
+  calendarEvents         GoogleCalendarEvent[]
+  gmailMessages          GmailMessage[]
+
+  @@index([organizationId, status])
+}
+
+model GoogleCalendarEvent {
+  id                 String           @id @default(uuid()) @db.Uuid
+  organizationId     String           @db.Uuid
+  connectionId       String           @db.Uuid
+  googleEventId      String
+  summary            String
+  description        String?
+  location           String?
+  startsAt           DateTime
+  endsAt             DateTime
+  isAllDay           Boolean          @default(false)
+  status             String           @default("confirmed") // "confirmed" | "tentative" | "cancelled"
+  htmlLink           String?
+  attendees          Json             @default("[]")
+  creatorEmail       String?
+  organizerEmail     String?
+  etag               String?
+  projectId          String?          @db.Uuid
+  meetingId          String?          @db.Uuid
+  suggestedProjectId String?          @db.Uuid
+  suggestionReason   String?
+  metadata           Json             @default("{}")
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  organization       Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connection         GoogleConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  project            Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  suggestedProject   Project?         @relation("SuggestedCalendarProject", fields: [suggestedProjectId], references: [id], onDelete: SetNull)
+  meeting            Meeting?         @relation("GoogleMeetingLink", fields: [meetingId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, googleEventId])
+  @@index([organizationId, startsAt, endsAt])
+  @@index([organizationId, projectId])
+  @@index([organizationId, status])
+}
+
+model GmailMessage {
+  id                 String           @id @default(uuid()) @db.Uuid
+  organizationId     String           @db.Uuid
+  connectionId       String           @db.Uuid
+  gmailMessageId     String
+  threadId           String?
+  subject            String
+  from               String
+  to                 String?
+  date               DateTime?
+  snippet            String
+  labels             String[]         @default([])
+  projectId          String?          @db.Uuid
+  suggestedProjectId String?          @db.Uuid
+  suggestionReason   String?
+  metadata           Json             @default("{}")
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  organization       Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connection         GoogleConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  project            Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  suggestedProject   Project?         @relation("SuggestedGmailProject", fields: [suggestedProjectId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, gmailMessageId])
+  @@index([organizationId, date])
+  @@index([organizationId, projectId])
+}
+
 
