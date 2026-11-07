@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Next.js and build outputs
+.next/
+dist/
+apps/api/dist/
+.browser-dist/
+*.tsbuildinfo
+
+# Test outputs and reports
+coverage/
+playwright-report/
+test-results/
+
+# Environment configurations and secrets
+.env
+.env*.local
+.env.production
+.env.staging
+!.env.example
+
+# Local storage and private uploads
+apps/api/uploads/
+var/
+
+# Database dumps, backups and sqlite artifacts
+backups/
+*.dump
+*.sql.bak
+apps/api/prisma/*.db
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+*.log

@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "declaration": false,
+    "incremental": false,
+    "sourceMap": false,
+    "outDir": "./.browser-dist",
+    "rootDir": "."
+  },
+  "include": ["test/browser-api.ts"],
+  "exclude": ["node_modules", "dist", ".browser-dist"]
+}

@@ -1,0 +1,35 @@
+{
+  "name": "nexora",
+  "private": true,
+  "engines": {
+    "node": "^20.19.0 || ^22.22.3 || ^24.15.0 || >=26.0.0"
+  },
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c cyan,magenta \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "npm --workspace apps/api run start:dev",
+    "dev:web": "npm --workspace apps/web run dev",
+    "build": "npm --workspace apps/api run build && npm --workspace apps/web run build",
+    "test": "npm --workspace apps/api test && npm --workspace apps/web run lint",
+    "test:e2e": "npm --workspace apps/api run test:e2e",
+    "test:browser": "npm --workspace apps/api run test:browser",
+    "db:generate": "npm --workspace apps/api run prisma:generate",
+    "db:migrate": "npm --workspace apps/api run prisma:migrate",
+    "db:seed": "npm --workspace apps/api run prisma:seed"
+  },
+  "devDependencies": {
+    "@nestjs/common": "12.4.0",
+    "@nestjs/core": "12.4.0",
+    "@nestjs/platform-express": "^12.4.0",
+    "@playwright/test": "1.65.0",
+    "concurrently": "^9.1.2",
+    "typescript": "6.0.2"
+  },
+  "overrides": {
+    "@nestjs/common": "12.4.0",
+    "@nestjs/core": "12.4.0"
+  }
+}
