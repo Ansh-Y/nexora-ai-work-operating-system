@@ -30,7 +30,8 @@ See `apps/api/prisma/schema.prisma` for the canonical relational model. The sche
 - `organizations`: tenant creation, current workspace and membership role checks.
 - `projects`: tenant-scoped project lifecycle and membership.
 - `tasks`: task lifecycle, dependency constraints, downstream impact, comments, and notification events.
-- `meetings`: tenant-scoped meeting CRUD, private local recording storage, queued transcription/analysis, exact transcript evidence validation, action approval/rejection/expiry, and task conversion after approval.
+- `meetings`: tenant-scoped meeting CRUD, private audio storage with modular provider architecture, queued transcription/analysis, exact transcript evidence validation, action approval/rejection/expiry, and task conversion after approval.
+- `storage`: modular private cloud storage provider architecture (`StorageProvider` interface with `LocalStorageProvider` and zero-dependency SigV4 `S3StorageProvider`), tenant isolation, MIME magic validation, SHA-256 checksums, presigned URLs, organization retention policies, legal holds (`FileRetentionHold`), dry-run preview, and BullMQ background cleanup sweeps.
 - `calendar`: bounded tenant-scoped event queries for projects, tasks, milestones and meetings, with critical-path and downstream metadata.
 - `search`: tenant-scoped keyword retrieval across projects, tasks, comments, meetings and documents; optional pgvector ranking with a configured embedding provider.
 - `notifications`: per-user unread state, assignment/comment/mention/blocker signals, per-user realtime inbox refresh, and BullMQ deadline sweeps (09:00 UTC daily, retries with exponential backoff, deduplicated reminder keys, and queue status for managers).
@@ -60,9 +61,9 @@ Meeting recordings are stored in private local files by default; configure `MEET
 | 3 | Projects, tasks, dependencies, dashboard | Core complete; calendar/timeline views added, attachments and advanced filtering pending |
 | 4 | Realtime collaboration and notifications | Partial: comments, authorized rooms, presence events, in-app notices and daily BullMQ deadline reminders; presence UI and advanced schedules pending |
 | 5 | AI planning, blocker analysis, duplicate detection | Core flows complete; cited workspace Q&A and portfolio risk signals added; duplicate detection remains lexical |
-| 6 | Meeting processing and semantic search | Meeting CRUD, private local audio upload, queued transcription/analysis, transcript-grounded decisions/actions, and GitHub event search sources; hosted storage and broader document/activity indexing pending |
-| 7 | Approval workflows and audit logs | AI plan and meeting action review, expiry, repeat-execution protection and immutable audit events implemented; additional action types pending |
-| 8 | GitHub, Calendar, Gmail | GitHub OAuth, encrypted token storage, repository linking and signed webhook activity capture implemented; automatic task status rules and Google Calendar/Gmail sync pending |
+| 6 | Meeting processing and semantic search | Meeting CRUD, private audio upload (local & S3), queued transcription/analysis, transcript-grounded decisions/actions, and GitHub event search sources; broader activity indexing pending |
+| 7 | Approval workflows and audit logs | AI plan and meeting action review, expiry, repeat-execution protection, storage retention policies/holds, and immutable audit events implemented |
+| 8 | GitHub, Storage, Calendar, Gmail | GitHub OAuth, repository linking, automation rules, and private cloud storage (local/S3 with retention policies & legal holds) implemented; Google Calendar/Gmail sync pending |
 | 9 | Automated tests, hardening, deployment | Unit, disposable-database HTTP security/workflow, Chromium browser journey and backup/restore rehearsal run locally; production hardening/deployment automation pending |
 
 ## Risks and open constraints

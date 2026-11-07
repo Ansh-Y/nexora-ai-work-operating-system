@@ -131,3 +131,37 @@ Paid LLM/transcription behavior was not exercised because tests intentionally cl
 ### Recommended next development phase
 
 Implement the next provider workflow as Google Calendar sync and add configurable GitHub pull-request merge rules with explicit project permissions. In parallel, move meeting recordings behind a private object-storage adapter with retention controls, expand RAG chunking for documents/transcripts, and add credential-backed provider tests. Revisit the ESLint dependency chain when a compatible patched minimatch range is available.
+
+## Release 3 Step 2 — Private Cloud Storage & Retention Management (2026-11-07)
+
+Release 3 Step 2 was implemented on top of the baseline commit `85878ad` (Release 3 Step 1). All changes were strictly additive and preserved backward compatibility with existing meeting recordings and documents.
+
+### Schema Changes & Migration
+Additive migration `20261107123000_storage_and_retention_management` was applied to the active database `nexora` (11 migrations total).
+- New enums: `StorageUploadStatus` (`PENDING`, `READY`, `FAILED`), `RetentionHoldType` (`LEGAL`, `OPERATIONAL`, `COMPLIANCE`).
+- New models:
+  - `StorageObject`: Tracks tenant-isolated object keys, SHA-256 checksums, byte sizes, MIME types, provider names, upload status, expiration dates, and links to `MeetingRecording` and `Document`.
+  - `OrganizationRetentionPolicy`: Configurable days for `recordingRetentionDays` and `documentRetentionDays`, `autoDeleteExpired` flag, and `manualDeletionAllowed`.
+  - `FileRetentionHold`: Immutable holds with reason, hold type, applying user, and release audit tracking.
+- Relations: `MeetingRecording.storageObjectId` and `Document.storageObjectId`.
+
+### Security Hardening & Zero-Dependency S3
+- **Zero New Dependencies**: Implemented private S3-compatible cloud storage (AWS S3 & Cloudflare R2) using Node.js native `crypto` and `fetch` with AWS Signature Version 4 (SigV4). Avoided adding large or vulnerable AWS SDK client packages.
+- **Traversal Defense**: Multi-layered path traversal prevention in `LocalStorageProvider` and `FileValidator`. Rejects paths with `..`, `\`, null bytes, and forces resolution inside tenant-isolated root roots. Filename normalization neutralizes dangerous characters and traversal sequences.
+- **MIME Sniffing & Content Validation**: `FileValidator` verifies binary magic bytes for audio (MP3 ID3, WAV RIFF, MP4 ftyp) and documents (PDF `%PDF-`, UTF-8 text/markdown/json/csv). Rejects disguised executables and malicious payloads with `BadRequestException`.
+- **Integrity**: SHA-256 checksums calculated and verified on all incoming uploads.
+- **Short-Lived Signed URLs**: Download and upload URLs expire within configurable TTLs (default 15 minutes) signed via HMAC-SHA256 (local) or AWS SigV4 (S3). Secret credentials are never exposed in query strings or transmitted to the client.
+- **Legal Hold Shielding**: Files under active `FileRetentionHold` are strictly protected against both manual deletion (400 Bad Request) and automatic background retention sweeps.
+- **Dry-Run Inspection**: Safe `/api/storage/retention/dry-run` endpoint allows workspace owners to inspect eligible vs. held files before triggering deletions.
+- **Background Worker**: BullMQ queue `nexora-storage-retention` handles background sweeps and incomplete upload cleanups with exponential backoff retries and audit logging.
+
+### Full Test Verification
+| Command | Result |
+|---|---|
+| `npm run build` | Passed: NestJS API and Next.js frontend compiled cleanly with 0 TypeScript/ESLint errors |
+| `npm test` | Passed: 8 unit test suites, 40 tests (including 8 storage security tests); frontend ESLint clean |
+| `npm run test:e2e` | Passed: 4 E2E test suites, 28 tests on isolated database (including 16 storage & retention tests) |
+| `npm run test:browser` | Passed: Playwright Chromium user journey covering workspace creation, meetings, calendar, GitHub, and private storage UI |
+| `npm audit --omit=dev` | Passed: 0 vulnerabilities |
+| `npm audit` | 8 moderate development-only entries from known Next.js minimatch advisory chain |
+

@@ -80,6 +80,18 @@ enum GitHubAutomationRunStatus {
   SKIPPED
 }
 
+enum StorageUploadStatus {
+  PENDING
+  READY
+  FAILED
+}
+
+enum RetentionHoldType {
+  LEGAL
+  OPERATIONAL
+  COMPLIANCE
+}
+
 enum ActorType {
   USER
   AI
@@ -146,6 +158,8 @@ model User {
   createdGitHubRules        GitHubAutomationRule[] @relation("GitHubRuleCreator")
   updatedGitHubRules        GitHubAutomationRule[] @relation("GitHubRuleUpdater")
   reviewedGitHubRuns        GitHubAutomationRun[]  @relation("GitHubRunReviewer")
+  appliedHolds              FileRetentionHold[]    @relation("HoldApplier")
+  releasedHolds             FileRetentionHold[]    @relation("HoldReleaser")
 }
 
 model Organization {
@@ -180,6 +194,9 @@ model Organization {
   refreshSessions     RefreshSession[]
   gitHubAutomationRules GitHubAutomationRule[]
   gitHubAutomationRuns  GitHubAutomationRun[]
+  storageObjects        StorageObject[]
+  retentionPolicy       OrganizationRetentionPolicy?
+  fileRetentionHolds    FileRetentionHold[]
 }
 
 model RefreshSession {
@@ -388,6 +405,7 @@ model MeetingRecording {
   organizationId        String                 @db.Uuid
   meetingId             String                 @db.Uuid
   uploadedById          String?                @db.Uuid
+  storageObjectId       String?                @unique @db.Uuid
   storageKey            String                 @unique
   fileName              String
   mimeType              String
@@ -403,6 +421,7 @@ model MeetingRecording {
   organization          Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   meeting               Meeting                @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   uploadedBy            User?                  @relation("MeetingRecordingUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  storageObject         StorageObject?         @relation("RecordingStorageObject", fields: [storageObjectId], references: [id], onDelete: SetNull)
   segments              TranscriptSegment[]
   decisions             MeetingDecision[]
   actionItems           MeetingActionItem[]
@@ -483,16 +502,18 @@ model MeetingActionItem {
 }
 
 model Document {
-  id             String       @id @default(uuid()) @db.Uuid
-  organizationId String       @db.Uuid
-  projectId      String?      @db.Uuid
-  title          String
-  mimeType       String
-  storageKey     String
-  extractedText  String?
-  createdAt      DateTime     @default(now())
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project        Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  id              String         @id @default(uuid()) @db.Uuid
+  organizationId  String         @db.Uuid
+  projectId       String?        @db.Uuid
+  storageObjectId String?        @unique @db.Uuid
+  title           String
+  mimeType        String
+  storageKey      String
+  extractedText   String?
+  createdAt       DateTime       @default(now())
+  organization    Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project         Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  storageObject   StorageObject? @relation("DocumentStorageObject", fields: [storageObjectId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, projectId])
 }
@@ -720,3 +741,70 @@ model GitHubAutomationRun {
   @@index([organizationId, ruleId, createdAt])
   @@index([organizationId, taskId])
 }
+
+model StorageObject {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @db.Uuid
+  provider       String              @default("local")
+  bucket         String?
+  storageKey     String              @unique
+  fileName       String
+  mimeType       String
+  sizeBytes      Int
+  sha256         String
+  entityType     String              // "MEETING_RECORDING" | "DOCUMENT" | "TRANSCRIPT"
+  entityId       String?             @db.Uuid
+  uploadStatus   StorageUploadStatus @default(READY)
+  lastAccessedAt DateTime?
+  expiresAt      DateTime?
+  deletedAt      DateTime?
+  metadata       Json                @default("{}")
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  holds          FileRetentionHold[]
+  recording      MeetingRecording?   @relation("RecordingStorageObject")
+  document       Document?           @relation("DocumentStorageObject")
+
+  @@index([organizationId, entityType])
+  @@index([organizationId, expiresAt])
+  @@index([organizationId, deletedAt])
+  @@index([organizationId, sha256])
+}
+
+model OrganizationRetentionPolicy {
+  id                     String       @id @default(uuid()) @db.Uuid
+  organizationId         String       @unique @db.Uuid
+  recordingRetentionDays Int?
+  documentRetentionDays  Int?
+  autoDeleteExpired      Boolean      @default(false)
+  manualDeletionAllowed  Boolean      @default(true)
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+
+  organization           Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model FileRetentionHold {
+  id              String            @id @default(uuid()) @db.Uuid
+  organizationId  String            @db.Uuid
+  storageObjectId String            @db.Uuid
+  reason          String
+  holdType        RetentionHoldType @default(LEGAL)
+  appliedById     String            @db.Uuid
+  appliedAt       DateTime          @default(now())
+  releasedById    String?           @db.Uuid
+  releasedAt      DateTime?
+  releaseReason   String?
+  createdAt       DateTime          @default(now())
+
+  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  storageObject   StorageObject     @relation(fields: [storageObjectId], references: [id], onDelete: Cascade)
+  appliedBy       User              @relation("HoldApplier", fields: [appliedById], references: [id])
+  releasedBy      User?             @relation("HoldReleaser", fields: [releasedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, storageObjectId])
+  @@index([storageObjectId, releasedAt])
+}
+

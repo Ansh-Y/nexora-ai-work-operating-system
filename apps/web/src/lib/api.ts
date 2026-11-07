@@ -28,6 +28,7 @@ export const api = {
   },
   get(path: string) { return this.request(path); },
   post(path: string, body: unknown) { return this.request(path, "POST", body); },
+  put(path: string, body: unknown) { return this.request(path, "PUT", body); },
   patch(path: string, body: unknown) { return this.request(path, "PATCH", body); },
   delete(path: string) { return this.request(path, "DELETE"); },
   async download(path: string): Promise<Blob> {

@@ -63,4 +63,7 @@ test('a new member can create a project and review grounded meeting actions', as
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'GitHub', exact: true })).toBeVisible();
   await expect(page.getByText('GitHub OAuth is not configured.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Private Cloud Storage & Retention', exact: true })).toBeVisible();
+  await expect(page.getByText('LOCAL ENCRYPTED STORAGE')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Retention Policy' })).toBeVisible();
 });

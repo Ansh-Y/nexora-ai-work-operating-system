@@ -128,7 +128,25 @@ export class MeetingsService {
     const storageKey = await this.storage.store(user.orgId, recordingId, audio);
     try {
       await this.prisma.$transaction(async tx => {
-        await tx.meetingRecording.create({ data: { id: recordingId, organizationId: user.orgId, meetingId, uploadedById: user.sub, storageKey, fileName: audio.fileName, mimeType: audio.mimeType, sizeBytes: audio.sizeBytes, sha256: audio.sha256, version, processingState: state, processingError, processingGeneration: configured ? 1 : 0 } });
+        const policy = await tx.organizationRetentionPolicy.findUnique({ where: { organizationId: user.orgId } });
+        const expiresAt = policy?.recordingRetentionDays ? new Date(Date.now() + policy.recordingRetentionDays * 86400000) : null;
+        const stObj = await tx.storageObject.create({
+          data: {
+            id: randomUUID(),
+            organizationId: user.orgId,
+            provider: 'local',
+            storageKey,
+            fileName: audio.fileName,
+            mimeType: audio.mimeType,
+            sizeBytes: audio.sizeBytes,
+            sha256: audio.sha256,
+            entityType: 'MEETING_RECORDING',
+            entityId: recordingId,
+            uploadStatus: 'READY',
+            expiresAt,
+          },
+        });
+        await tx.meetingRecording.create({ data: { id: recordingId, organizationId: user.orgId, meetingId, uploadedById: user.sub, storageKey, storageObjectId: stObj.id, fileName: audio.fileName, mimeType: audio.mimeType, sizeBytes: audio.sizeBytes, sha256: audio.sha256, version, processingState: state, processingError, processingGeneration: configured ? 1 : 0 } });
         await tx.meeting.update({ where: { id: meetingId }, data: { processingState: state, processingError, status: configured ? MeetingStatus.PROCESSING : meeting.status, summary: null, summaryEvidence: Prisma.DbNull, analysisRecordingId: null } });
         await tx.auditEvent.create({ data: { organizationId: user.orgId, actorType: 'USER', actorId: user.sub, action: 'meeting.recording.uploaded', targetType: 'meeting', targetId: meetingId, metadata: { recordingId, fileName: audio.fileName, mimeType: audio.mimeType, sizeBytes: audio.sizeBytes, version } } });
       });
