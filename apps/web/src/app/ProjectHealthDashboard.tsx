@@ -55,10 +55,10 @@ export default function ProjectHealthDashboard({
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (initialProjectId && !selectedProjectId) {
+    if (initialProjectId) {
       setSelectedProjectId(initialProjectId);
     }
-  }, [initialProjectId, selectedProjectId]);
+  }, [initialProjectId]);
 
   // Dismiss modal state
   const [dismissModalRisk, setDismissModalRisk] = useState<any>(null);
@@ -94,14 +94,14 @@ export default function ProjectHealthDashboard({
     setError("");
     setAiExplanation(null);
     try {
-      const [health, hist, risksData] = await Promise.all([
-        api.get(`/health/projects/${projectId}`),
+      const health: any = await api.get(`/health/projects/${projectId}`);
+      const [hist, risksData]: any = await Promise.all([
         api.get(`/health/projects/${projectId}/history?limit=30`),
         api.get(`/health/projects/${projectId}/risks?status=ALL`),
       ]);
       setProjectHealth(health);
       setHistory(hist.history ?? []);
-      setRisks(risksData.risks ?? []);
+      setRisks(risksData.risks?.length ? risksData.risks : (health.risks ?? []));
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Failed to load project health details.");
     } finally {

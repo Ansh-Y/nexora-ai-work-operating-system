@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   BadRequestException,
   ForbiddenException,
@@ -28,6 +29,11 @@ import {
   ProjectRisksQueryDto,
   ProposeRiskActionDto,
 } from './project-health.dto';
+
+export function getProjectAdvisoryLockKey(projectId: string): bigint {
+  const hash = createHash('sha256').update(`project-health-calc:${projectId}`).digest();
+  return hash.readBigInt64BE(0);
+}
 
 @Injectable()
 export class ProjectHealthService {
@@ -511,141 +517,183 @@ export class ProjectHealthService {
     projectId: string,
     forceSnapshot = false,
   ): Promise<HealthCalculationResult> {
-    const project = await this.loadProjectWithRelations(organizationId, projectId);
-    if (!project) {
-      throw new NotFoundException(`Project ${projectId} not found.`);
-    }
+    return this.prisma.$transaction(
+      async tx => {
+        // 1. Acquire transaction-level PostgreSQL advisory lock for this project.
+        // This serializes concurrent recalculation requests for the same project,
+        // avoiding duplicate snapshots, while preserving parallel execution for different projects.
+        // PostgreSQL automatically releases the advisory lock when the transaction completes (commit or rollback).
+        const lockKey = getProjectAdvisoryLockKey(projectId);
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(${lockKey})`;
 
-    // Fetch dependencies
-    const dependencies = await this.prisma.taskDependency.findMany({
-      where: {
-        organizationId,
-        blockingTask: { projectId },
-      },
-      select: { blockingTaskId: true, blockedTaskId: true },
-    });
+        // 2. Tenant isolation check: Ensure project exists and belongs to this organization
+        const project = await this.loadProjectWithRelations(organizationId, projectId, tx);
+        if (!project) {
+          throw new NotFoundException(`Project ${projectId} not found.`);
+        }
 
-    const projectData = {
-      ...project,
-      githubEvents: project.githubRepositories.flatMap(r => r.events),
-    };
-
-    // Compute critical path
-    const criticalPath = calculateCriticalPath(
-      project.tasks as any,
-      dependencies,
-    );
-    const criticalPathIds = new Set(criticalPath.pathIds);
-
-    const now = new Date();
-    const result = this.scoringEngine.calculateHealth(
-      projectData,
-      dependencies,
-      criticalPathIds,
-      now,
-    );
-
-    // Fetch existing risks for dismissal checking and resolution
-    const existingRisks = await this.prisma.projectRisk.findMany({
-      where: { organizationId, projectId },
-    });
-    const existingRiskMap = new Map<string, (typeof existingRisks)[0]>();
-    for (const r of existingRisks) {
-      existingRiskMap.set(r.fingerprint, r);
-    }
-
-    const detectedFingerprints = new Set(result.risks.map(r => r.fingerprint));
-
-    // Upsert detected risks into database
-    await this.prisma.$transaction(async tx => {
-      for (const detected of result.risks) {
-        const existing = existingRiskMap.get(detected.fingerprint);
-
-        // If existing risk was DISMISSED, keep it dismissed unless severity worsened
-        const status =
-          existing?.status === 'DISMISSED' && existing.severity === detected.severity
-            ? 'DISMISSED'
-            : 'ACTIVE';
-
-        await tx.projectRisk.upsert({
-          where: {
-            projectId_fingerprint: {
-              projectId,
-              fingerprint: detected.fingerprint,
-            },
-          },
-          create: {
-            organizationId,
-            projectId,
-            riskType: detected.riskType,
-            fingerprint: detected.fingerprint,
-            severity: detected.severity,
-            title: detected.title,
-            explanation: detected.explanation,
-            evidence: detected.evidence as any,
-            recommendedAction: detected.recommendedAction,
-            confidence: detected.confidence,
-            affectedTaskIds: detected.affectedTaskIds,
-            affectedMilestoneIds: detected.affectedMilestoneIds,
-            status,
-          },
-          update: {
-            severity: detected.severity,
-            title: detected.title,
-            explanation: detected.explanation,
-            evidence: detected.evidence as any,
-            recommendedAction: detected.recommendedAction,
-            confidence: detected.confidence,
-            affectedTaskIds: detected.affectedTaskIds,
-            affectedMilestoneIds: detected.affectedMilestoneIds,
-            ...(status === 'ACTIVE' && existing?.status === 'RESOLVED' ? { status: 'ACTIVE' } : {}),
-          },
+        // 3. Debounce check: Performed inside the lock so concurrent requests observe committed snapshots.
+        // If another request just calculated and saved a snapshot within the 10-minute window,
+        // reuse the fresh snapshot and active risks without writing an unnecessary duplicate row.
+        const now = new Date();
+        const lastSnap = await tx.projectHealthSnapshot.findFirst({
+          where: { organizationId, projectId },
+          orderBy: { createdAt: 'desc' },
         });
-      }
 
-      // Mark previously active risks that are no longer detected as RESOLVED
-      for (const existing of existingRisks) {
-        if (existing.status === 'ACTIVE' && !detectedFingerprints.has(existing.fingerprint)) {
-          await tx.projectRisk.update({
-            where: { id: existing.id },
-            data: { status: 'RESOLVED' },
+        const SNAPSHOT_DEBOUNCE_MS = 10 * 60_000;
+        const isDebounced =
+          !forceSnapshot &&
+          lastSnap &&
+          now.getTime() - lastSnap.createdAt.getTime() < SNAPSHOT_DEBOUNCE_MS;
+
+        if (isDebounced && lastSnap) {
+          const activeRisks = await tx.projectRisk.findMany({
+            where: { organizationId, projectId, status: 'ACTIVE' },
+            orderBy: { createdAt: 'desc' },
+          });
+
+          return {
+            projectId: project.id,
+            projectName: project.name,
+            score: lastSnap.score,
+            classification: lastSnap.classification as HealthClassification,
+            algorithmVersion: lastSnap.algorithmVersion,
+            dataCompleteness: lastSnap.dataCompleteness,
+            dimensionScores: lastSnap.dimensionScores as any,
+            activeRisksCount: lastSnap.activeRisksCount as any,
+            forecast: lastSnap.forecast as any,
+            explanation: lastSnap.explanation || '',
+            calculatedAt: lastSnap.createdAt,
+            risks: activeRisks as any,
+            recommendations: [],
+          };
+        }
+
+        // 4. Fetch dependencies
+        const dependencies = await tx.taskDependency.findMany({
+          where: {
+            organizationId,
+            blockingTask: { projectId },
+          },
+          select: { blockingTaskId: true, blockedTaskId: true },
+        });
+
+        const projectData = {
+          ...project,
+          githubEvents: project.githubRepositories.flatMap(r => r.events),
+        };
+
+        // Compute critical path
+        const criticalPath = calculateCriticalPath(
+          project.tasks as any,
+          dependencies,
+        );
+        const criticalPathIds = new Set(criticalPath.pathIds);
+
+        const result = this.scoringEngine.calculateHealth(
+          projectData,
+          dependencies,
+          criticalPathIds,
+          now,
+        );
+
+        // Fetch existing risks for dismissal checking and resolution
+        const existingRisks = await tx.projectRisk.findMany({
+          where: { organizationId, projectId },
+        });
+        const existingRiskMap = new Map<string, (typeof existingRisks)[0]>();
+        for (const r of existingRisks) {
+          existingRiskMap.set(r.fingerprint, r);
+        }
+
+        const detectedFingerprints = new Set(result.risks.map(r => r.fingerprint));
+
+        // Upsert detected risks into database
+        for (const detected of result.risks) {
+          const existing = existingRiskMap.get(detected.fingerprint);
+
+          // If existing risk was DISMISSED, keep it dismissed unless severity worsened
+          const status =
+            existing?.status === 'DISMISSED' && existing.severity === detected.severity
+              ? 'DISMISSED'
+              : 'ACTIVE';
+
+          await tx.projectRisk.upsert({
+            where: {
+              projectId_fingerprint: {
+                projectId,
+                fingerprint: detected.fingerprint,
+              },
+            },
+            create: {
+              organizationId,
+              projectId,
+              riskType: detected.riskType,
+              fingerprint: detected.fingerprint,
+              severity: detected.severity,
+              title: detected.title,
+              explanation: detected.explanation,
+              evidence: detected.evidence as any,
+              recommendedAction: detected.recommendedAction,
+              confidence: detected.confidence,
+              affectedTaskIds: detected.affectedTaskIds,
+              affectedMilestoneIds: detected.affectedMilestoneIds,
+              status,
+            },
+            update: {
+              severity: detected.severity,
+              title: detected.title,
+              explanation: detected.explanation,
+              evidence: detected.evidence as any,
+              recommendedAction: detected.recommendedAction,
+              confidence: detected.confidence,
+              affectedTaskIds: detected.affectedTaskIds,
+              affectedMilestoneIds: detected.affectedMilestoneIds,
+              ...(status === 'ACTIVE' && existing?.status === 'RESOLVED' ? { status: 'ACTIVE' } : {}),
+            },
           });
         }
-      }
 
-      // Check whether to create a new historical snapshot
-      // Avoid creating duplicate snapshots if score and classification haven't materially changed within last 6 hours
-      const lastSnap = await tx.projectHealthSnapshot.findFirst({
-        where: { organizationId, projectId },
-        orderBy: { createdAt: 'desc' },
-      });
+        // Mark previously active risks that are no longer detected as RESOLVED
+        for (const existing of existingRisks) {
+          if (existing.status === 'ACTIVE' && !detectedFingerprints.has(existing.fingerprint)) {
+            await tx.projectRisk.update({
+              where: { id: existing.id },
+              data: { status: 'RESOLVED' },
+            });
+          }
+        }
 
-      const hasChanged =
-        !lastSnap ||
-        lastSnap.score !== result.score ||
-        lastSnap.classification !== result.classification ||
-        now.getTime() - lastSnap.createdAt.getTime() > 6 * 3600_000;
+        // Check whether to create a new historical snapshot
+        const hasChanged =
+          !lastSnap ||
+          lastSnap.score !== result.score ||
+          lastSnap.classification !== result.classification ||
+          now.getTime() - lastSnap.createdAt.getTime() >= SNAPSHOT_DEBOUNCE_MS;
 
-      if (hasChanged || forceSnapshot) {
-        await tx.projectHealthSnapshot.create({
-          data: {
-            organizationId,
-            projectId,
-            score: result.score,
-            classification: result.classification,
-            dimensionScores: result.dimensionScores as any,
-            activeRisksCount: result.activeRisksCount as any,
-            dataCompleteness: result.dataCompleteness,
-            forecast: result.forecast as any,
-            algorithmVersion: result.algorithmVersion,
-            explanation: result.explanation,
-            createdAt: now,
-          },
-        });
-      }
-    });
+        if (hasChanged || forceSnapshot) {
+          await tx.projectHealthSnapshot.create({
+            data: {
+              organizationId,
+              projectId,
+              score: result.score,
+              classification: result.classification,
+              dimensionScores: result.dimensionScores as any,
+              activeRisksCount: result.activeRisksCount as any,
+              dataCompleteness: result.dataCompleteness,
+              forecast: result.forecast as any,
+              algorithmVersion: result.algorithmVersion,
+              explanation: result.explanation,
+              createdAt: now,
+            },
+          });
+        }
 
-    return result;
+        return result;
+      },
+      { maxWait: 10000, timeout: 30000 },
+    );
   }
 
   async calculateOrganizationBatch(organizationId: string, limit = 10) {
@@ -673,8 +721,12 @@ export class ProjectHealthService {
     return orgs.map(o => o.id);
   }
 
-  private async loadProjectWithRelations(organizationId: string, projectId: string) {
-    return this.prisma.project.findFirst({
+  private async loadProjectWithRelations(
+    organizationId: string,
+    projectId: string,
+    db: Prisma.TransactionClient | PrismaService = this.prisma,
+  ) {
+    return db.project.findFirst({
       where: { id: projectId, organizationId },
       include: {
         tasks: {
