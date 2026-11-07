@@ -159,9 +159,24 @@ Additive migration `20261107123000_storage_and_retention_management` was applied
 | Command | Result |
 |---|---|
 | `npm run build` | Passed: NestJS API and Next.js frontend compiled cleanly with 0 TypeScript/ESLint errors |
-| `npm test` | Passed: 8 unit test suites, 40 tests (including 8 storage security tests); frontend ESLint clean |
+| `npm test` | Passed: 9 unit test suites, 50 tests (including 10 storage reliability tests and 8 storage security tests); frontend ESLint clean |
 | `npm run test:e2e` | Passed: 4 E2E test suites, 28 tests on isolated database (including 16 storage & retention tests) |
 | `npm run test:browser` | Passed: Playwright Chromium user journey covering workspace creation, meetings, calendar, GitHub, and private storage UI |
 | `npm audit --omit=dev` | Passed: 0 vulnerabilities |
 | `npm audit` | 8 moderate development-only entries from known Next.js minimatch advisory chain |
+
+## Release 3 Step 2.1 — Storage Reliability Remediation (2026-11-07)
+
+### 1. Reliable Deletion & Orphaned Object Prevention
+- **Retryable Deletion State**: When physical deletion fails from storage providers (S3 timeout, 403, 500, network loss), database records are **not** marked `deletedAt`. Instead, the file transitions into a retryable state (`metadata.deletion.status = 'PENDING_RETRY'`) preserving key, provider, attempt count, and last error.
+- **Access Guarding**: Files in `PENDING_RETRY` or `FAILED_PERMANENT` are immediately blocked from download streams or presigned URL generation (`404 Not Found`).
+- **Bounded Backoff & Cap**: Retries use exponential backoff (`10s * 2^(attempts-1)`, capped at 3600s) up to `MAX_RETRY_DELETION_ATTEMPTS = 5`. Upon exhaustion, transitions to `FAILED_PERMANENT` with `storage.deletion.exhausted` audit log.
+- **Hold Re-Evaluation on Retry**: When `reconcileFailedDeletions` processes a retry, it re-verifies active holds. If an active hold was placed between attempts, deletion is immediately aborted and transitioned to `CANCELLED_HOLD_APPLIED`.
+- **Idempotent Missing Objects**: Deleting an already-missing object (S3 404 / local ENOENT) succeeds idempotently and marks `deletedAt: now, status: 'COMPLETED'`.
+
+### 2. Redis Outage & Retention Sweep Concurrency
+- **Unbounded Execution Prevention**: Fallback sweeps during queue outages are strictly bounded to `MAX_SYNCHRONOUS_FALLBACK_BATCH = 25`. Unforced sweeps are deferred rather than executing in the request thread.
+- **Observability & Recovery**: Failed queue additions emit `storage.retention_sweep.enqueue_failed` and track target workspaces in `pendingOfflineSweeps`. When Redis connectivity restores, `resumePendingSweeps()` automatically drains and enqueues deferred sweeps.
+- **Deduplication & Mutual Exclusion**: BullMQ jobs use deterministic job IDs (`retention-sweep-${target}`). An internal `isSweeping` mutex prevents concurrent duplicate sweep executions from running simultaneously.
+
 

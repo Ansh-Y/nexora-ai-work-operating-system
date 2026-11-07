@@ -1,4 +1,5 @@
 import {
+  BadGatewayException,
   BadRequestException,
   ForbiddenException,
   Injectable,
@@ -285,6 +286,11 @@ export class StorageService {
     });
     if (!file) throw new NotFoundException('Storage file not found.');
 
+    const meta = file.metadata as Record<string, any> | null;
+    if (meta?.deletion?.status === 'PENDING_RETRY' || meta?.deletion?.status === 'FAILED_PERMANENT') {
+      throw new NotFoundException('Storage file is pending deletion and unavailable.');
+    }
+
     const provider = this.providerFactory.getProvider(file.provider);
     const url = await provider.generatePresignedDownloadUrl(file.storageKey, expiresInSeconds, file.fileName);
 
@@ -307,6 +313,11 @@ export class StorageService {
       where: { id: storageObjectId, organizationId: user.orgId, deletedAt: null },
     });
     if (!file) throw new NotFoundException('Storage file not found.');
+
+    const meta = file.metadata as Record<string, any> | null;
+    if (meta?.deletion?.status === 'PENDING_RETRY' || meta?.deletion?.status === 'FAILED_PERMANENT') {
+      throw new NotFoundException('Storage file is pending deletion and unavailable.');
+    }
 
     const provider = this.providerFactory.getProvider(file.provider);
     const stream = await provider.stream(file.storageKey);
@@ -349,37 +360,98 @@ export class StorageService {
     }
 
     const provider = this.providerFactory.getProvider(file.provider);
-    await provider.delete(file.storageKey).catch(() => undefined);
+    const now = new Date();
+    const existingMeta = (file.metadata as Record<string, any>) || {};
 
-    await this.prisma.$transaction(async tx => {
-      await tx.storageObject.update({
-        where: { id: file.id },
-        data: { deletedAt: new Date() },
+    try {
+      await provider.delete(file.storageKey);
+
+      // Physical deletion succeeded (or already missing) -> mark database record deleted
+      await this.prisma.$transaction(async tx => {
+        await tx.storageObject.update({
+          where: { id: file.id },
+          data: {
+            deletedAt: now,
+            metadata: {
+              ...existingMeta,
+              deletion: {
+                status: 'COMPLETED',
+                completedAt: now.toISOString(),
+              },
+            },
+          },
+        });
+
+        if (file.entityType === 'DOCUMENT' && file.entityId) {
+          await tx.document.deleteMany({ where: { id: file.entityId, organizationId: user.orgId } });
+        }
+
+        await tx.auditEvent.create({
+          data: {
+            organizationId: user.orgId,
+            actorType: 'USER',
+            actorId: user.sub,
+            action: 'storage.file.deleted',
+            targetType: 'storage_object',
+            targetId: file.id,
+            metadata: {
+              fileName: file.fileName,
+              sizeBytes: file.sizeBytes,
+              entityType: file.entityType,
+              provider: file.provider,
+            },
+          },
+        });
       });
 
-      if (file.entityType === 'DOCUMENT' && file.entityId) {
-        await tx.document.deleteMany({ where: { id: file.entityId, organizationId: user.orgId } });
-      }
+      return { deleted: true, fileId: file.id };
+    } catch (err: any) {
+      // Physical deletion failed -> DO NOT MARK AS DELETED! Enter retryable state
+      const attempts = 1;
+      const backoffSec = 10;
+      const nextRetryAt = new Date(Date.now() + backoffSec * 1000);
 
-      await tx.auditEvent.create({
+      await this.prisma.storageObject.update({
+        where: { id: file.id },
+        data: {
+          metadata: {
+            ...existingMeta,
+            deletion: {
+              status: 'PENDING_RETRY',
+              attempts,
+              maxAttempts: 5,
+              lastAttemptAt: now.toISOString(),
+              nextRetryAt: nextRetryAt.toISOString(),
+              lastError: err?.message || 'Storage provider deletion failure',
+              requestedBy: user.sub,
+            },
+          },
+        },
+      });
+
+      await this.prisma.auditEvent.create({
         data: {
           organizationId: user.orgId,
           actorType: 'USER',
           actorId: user.sub,
-          action: 'storage.file.deleted',
+          action: 'storage.file.deletion_failed',
           targetType: 'storage_object',
           targetId: file.id,
           metadata: {
             fileName: file.fileName,
-            sizeBytes: file.sizeBytes,
-            entityType: file.entityType,
             provider: file.provider,
+            storageKey: file.storageKey,
+            error: err?.message || 'Storage provider deletion failure',
+            attempt: attempts,
+            status: 'PENDING_RETRY',
           },
         },
       });
-    });
 
-    return { deleted: true, fileId: file.id };
+      throw new BadGatewayException(
+        `Failed to physically delete object from storage provider: ${err?.message || 'Provider error'}. Deletion has been scheduled for background retry.`
+      );
+    }
   }
 
   async applyHold(user: Principal, storageObjectId: string, dto: CreateRetentionHoldDto) {
@@ -559,7 +631,12 @@ export class StorageService {
 
   async triggerRetentionSweep(user: Principal) {
     this.assertAdmin(user);
-    const queued = await this.retentionService.enqueueSweep(user.orgId, true);
-    return { queued, organizationId: user.orgId, message: queued ? 'Retention sweep queued for processing.' : 'Retention sweep executed.' };
+    const result = await this.retentionService.enqueueSweep(user.orgId, true);
+    return {
+      queued: result.queued,
+      organizationId: user.orgId,
+      message: result.message,
+      sweptCount: result.sweptCount,
+    };
   }
 }
