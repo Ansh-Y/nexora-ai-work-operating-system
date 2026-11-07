@@ -257,6 +257,39 @@ Release 3 Step 3.1 hardens Google Workspace synchronization, calendar timezone c
 | `npm run test:browser` | Passed: 1 Playwright browser journey |
 | `npm audit --omit=dev` | Passed: 0 vulnerabilities |
 
+## Release 4.1 — Project Health Scoring & Predictive Risk Engine (2026-11-07)
+
+Release 4.1 introduces an end-to-end, multi-tenant project health scoring engine, rule-based predictive risk engine, explainable delay forecasting, and actionable remediation proposals.
+
+### 1. Deterministic AI Boundary & Non-Autonomous Guardrails
+- **Deterministic Core Calculations**: Health classifications (`HEALTHY`, `AT_RISK`, `CRITICAL`, `INSUFFICIENT_DATA`, `EXCLUDED`), 5-dimension scores, and 10 structural risk evaluations are computed purely deterministically with zero LLM dependence.
+- **Strict Grounding & Prompt Injection Defense**: When generating natural language summaries (`/api/health/projects/:id/explain`), user strings (project names, task titles, descriptions) are sanitized and passed in a structured JSON schema with explicit system-level isolation:
+  - Untrusted data instruction: all user text is treated as passive data, never instructions.
+  - Zero hallucination constraint: the model is prohibited from inventing dates, risks, or metrics not present in the deterministic payload.
+  - Deterministic fallback: if OpenAI is offline, unconfigured, or returns an error, the service falls back gracefully to a deterministic template with zero downtime.
+- **Human-in-the-Loop Safeguards**: Remediation recommendations do not autonomously mutate tasks, reassign team members, or change due dates. Actions spawn structured `AiProposal` records that require explicit review and approval by an authorized workspace manager.
+
+### 2. Tenant Isolation & Role-Based Access Control (RBAC)
+- **Multi-Tenant Boundaries**: Every query enforces `where: { organizationId: user.orgId }`. Direct project and risk lookups verify that `organizationId` matches the authenticated token claim.
+- **Role Permissions**:
+  - `VIEWER` and `TEAM_MEMBER`: Read-only access to health overviews, project detail, historical snapshots, and risks. Recalculation, dismissal, and recommendation action generation are rejected with HTTP 403 Forbidden.
+  - `PROJECT_MANAGER`, `ADMIN`, `OWNER`: Authorized to trigger recalculations, dismiss risks with audit trail reasons, and create remediation proposals.
+
+### 3. Queue Reliability & Offline Degradation
+- **Deduplication**: BullMQ recalculation jobs enforce deduplicated job IDs (`health-calc-${projectId}`).
+- **Bounded Synchronous Fallback**: If Redis is offline or unconfigured, recalculations execute synchronously in a safe bounded mode without throwing 500 errors to the client.
+- **Transaction Isolation**: Risk upserts, state updates, and snapshot creations occur within database transactions (`prisma.$transaction`).
+
+### 4. Full Test Verification Matrix
+| Command | Result |
+|---|---|
+| `npm run build` | Passed: NestJS API and Next.js frontend built cleanly with 0 errors |
+| `npm test` | Passed: 11 test suites, 98 tests (including 24 comprehensive Project Health unit tests covering scoring, all 10 risk types, dismissal lifecycle, forecasting, recommendations, and queue fallback); frontend ESLint clean |
+| `npm run test:e2e` | Passed: 4 E2E test suites, 28 tests on isolated database |
+| `npm run test:browser` | Passed: 1 Playwright browser journey |
+| `npm audit --omit=dev` | Passed: 0 vulnerabilities |
+
+
 
 
 

@@ -162,6 +162,7 @@ model User {
   releasedHolds             FileRetentionHold[]    @relation("HoldReleaser")
   googleConnections         GoogleConnection[]   @relation("GoogleConnectionOwner")
   googleOAuthStates         GoogleOAuthState[]
+  dismissedRisks            ProjectRisk[]        @relation("RiskDismissedBy")
 }
 
 model Organization {
@@ -203,6 +204,8 @@ model Organization {
   googleOAuthStates     GoogleOAuthState[]
   googleCalendarEvents  GoogleCalendarEvent[]
   gmailMessages         GmailMessage[]
+  projectHealthSnapshots ProjectHealthSnapshot[]
+  projectRisks           ProjectRisk[]
 }
 
 model RefreshSession {
@@ -273,6 +276,8 @@ model Project {
   suggestedCalendarEvents GoogleCalendarEvent[] @relation("SuggestedCalendarProject")
   gmailMessages           GmailMessage[]
   suggestedGmailMessages  GmailMessage[]        @relation("SuggestedGmailProject")
+  healthSnapshots         ProjectHealthSnapshot[]
+  risks                   ProjectRisk[]
 
   @@index([organizationId, status])
   @@index([organizationId, updatedAt])
@@ -929,5 +934,57 @@ model GmailMessage {
   @@index([organizationId, date])
   @@index([organizationId, projectId])
 }
+
+model ProjectHealthSnapshot {
+  id               String       @id @default(uuid()) @db.Uuid
+  organizationId   String       @db.Uuid
+  projectId        String       @db.Uuid
+  score            Float?
+  classification   String       // "HEALTHY" | "AT_RISK" | "CRITICAL" | "INSUFFICIENT_DATA" | "EXCLUDED"
+  dimensionScores  Json         // { taskCompletion, deadlinePerformance, blockersAndDependencies, milestonePerformance, recentActivity }
+  activeRisksCount Json         // { total, critical, high, medium, low }
+  dataCompleteness Float        // 0.0 to 1.0
+  forecast         Json?        // { trend, estimatedCompletionDate, remainingWorkload, confidence, reasons }
+  algorithmVersion String       @default("1.0.0")
+  explanation      String?
+  createdAt        DateTime     @default(now())
+
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project          Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, projectId, createdAt])
+  @@index([organizationId, classification])
+}
+
+model ProjectRisk {
+  id                   String       @id @default(uuid()) @db.Uuid
+  organizationId       String       @db.Uuid
+  projectId            String       @db.Uuid
+  riskType             String
+  fingerprint          String
+  severity             String       // "CRITICAL" | "HIGH" | "MEDIUM" | "LOW"
+  title                String
+  explanation          String
+  evidence             Json
+  recommendedAction    String
+  confidence           String       @default("HIGH") // "HIGH" | "MEDIUM" | "LOW"
+  affectedTaskIds      String[]     @default([])
+  affectedMilestoneIds String[]     @default([])
+  status               String       @default("ACTIVE") // "ACTIVE" | "RESOLVED" | "DISMISSED"
+  dismissedAt          DateTime?
+  dismissedById        String?      @db.Uuid
+  dismissReason        String?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project              Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  dismissedBy          User?        @relation("RiskDismissedBy", fields: [dismissedById], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, fingerprint])
+  @@index([organizationId, projectId, status])
+  @@index([organizationId, severity, status])
+}
+
 
 

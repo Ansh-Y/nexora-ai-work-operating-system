@@ -294,3 +294,66 @@ kbd { font:500 9px 'DM Sans'; color:#9299a3; background:var(--soft); border:1px 
 .github-integration-panel { grid-column:1/-1; margin-top:12px; }.github-integration-panel>.muted-copy { margin:0 0 10px; font-size:8.5px; line-height:1.55; }.github-integration-panel code { color:#5d53b6; }
 .github-setup-note { display:grid; gap:5px; padding:10px; color:#717b86; background:var(--soft-surface); border-radius:7px; font-size:8px; line-height:1.6; }.github-setup-note b { color:var(--ink); font-size:9px; }.github-account-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-top:1px solid var(--line); }.github-account-row>span { display:grid; gap:4px; }.github-account-row small,.github-webhook-secret small { color:#8d959f; font-size:8px; }.github-account-row>div { display:flex; gap:6px; }.github-repository-picker { display:grid; grid-template-columns:1fr 1fr auto; align-items:end; gap:8px; padding:10px 0; border-top:1px solid var(--line); }.github-repository-picker label,.github-webhook-secret label { display:grid; gap:5px; color:#89919b; font-size:8px; }.github-repository-picker select,.github-webhook-secret input { min-width:0; height:30px; padding:0 7px; border:1px solid var(--line); border-radius:6px; color:var(--ink); background:var(--surface); font:inherit; }.github-linked-list { display:grid; }.github-linked-list .integration-row { gap:8px; }.github-linked-list .text-button { white-space:nowrap; }.danger-text { color:#bd5858; }.github-webhook-secret { display:grid; gap:8px; margin:10px 0; padding:11px; border:1px solid var(--line); border-radius:7px; background:var(--soft-surface); }.github-webhook-secret b,.github-events h3 { margin:0; color:var(--ink); font:700 9px Manrope; }.github-events { margin-top:10px; border-top:1px solid var(--line); }.github-events h3 { padding:10px 0 6px; }.github-event-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 0; border-top:1px solid var(--line); }.github-event-row>span { display:grid; gap:3px; min-width:0; }.github-event-row b { overflow:hidden; color:var(--ink); font-size:8.5px; text-overflow:ellipsis; white-space:nowrap; }.github-event-row small,.github-event-row time,.github-event-row a { color:#89919b; font-size:7.5px; }.github-event-row a { color:#5c4ec5; }.github-error { margin-bottom:8px; }
 @media(max-width:650px) { .github-account-row { align-items:flex-start; flex-direction:column; }.github-account-row>div { flex-wrap:wrap; }.github-repository-picker { grid-template-columns:1fr; }.github-linked-list .integration-row { align-items:flex-start; flex-wrap:wrap; padding:8px 0; }.github-linked-list .integration-row>span:nth-child(2) { min-width:calc(100% - 46px); } }
+
+/* Release 4.1: Project Health Scoring & Predictive Risk Engine */
+.project-health-workspace { display:grid; gap:16px; }
+.health-overview-header { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; }
+.health-metrics-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; }
+.health-stat-card { display:flex; align-items:center; gap:14px; padding:14px 16px; background:var(--surface); border:1px solid var(--line); border-radius:8px; }
+.health-stat-card .stat-icon { width:38px; height:38px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.health-stat-card .stat-icon.healthy { background:#ecfdf5; color:#059669; }
+.health-stat-card .stat-icon.at_risk { background:#fffbeb; color:#d97706; }
+.health-stat-card .stat-icon.critical { background:#fef2f2; color:#dc2626; }
+.health-stat-card .stat-icon.info { background:#eff6ff; color:#2563eb; }
+.health-stat-card .stat-icon.neutral { background:var(--soft); color:#8d959f; }
+.health-stat-card .stat-meta b { font:700 20px Manrope; color:var(--ink); display:block; line-height:1.2; }
+.health-stat-card .stat-meta span { font-size:10px; color:#8d959f; }
+
+.health-cards-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(310px, 1fr)); gap:14px; }
+.health-card { display:flex; flex-direction:column; gap:12px; padding:16px; background:var(--surface); border:1px solid var(--line); border-radius:8px; text-align:left; cursor:pointer; transition:transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease; }
+.health-card:hover { transform:translateY(-2px); border-color:#8275d5; box-shadow:0 4px 12px rgba(0,0,0,0.05); }
+.health-card.selected { border-color:#6a5bd7; outline:2px solid #8275d5; }
+.health-badge { display:inline-flex; align-items:center; gap:5px; padding:3px 8px; border-radius:999px; font-size:10px; font-weight:600; letter-spacing:0.02em; }
+.health-badge.healthy { background:#d1fae5; color:#065f46; }
+.health-badge.at_risk { background:#fef3c7; color:#92400e; }
+.health-badge.critical { background:#fee2e2; color:#991b1b; }
+.health-badge.insufficient_data { background:#e0e7ff; color:#3730a3; }
+.health-badge.excluded { background:var(--soft); color:#6b7280; }
+
+.health-detail-view { display:grid; gap:16px; }
+.health-hero-panel { display:flex; gap:24px; align-items:center; flex-wrap:wrap; padding:20px; background:var(--surface); border:1px solid var(--line); border-radius:8px; }
+.health-gauge { width:96px; height:96px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.health-gauge-inner { width:76px; height:76px; border-radius:50%; background:var(--surface); display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.health-gauge-inner b { font:700 24px Manrope; color:var(--ink); line-height:1; }
+.health-gauge-inner small { font-size:9px; color:#8d959f; }
+
+.dimension-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px; }
+.dimension-card { padding:12px; background:var(--soft); border-radius:6px; border:1px solid var(--line); }
+.dimension-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+.dimension-header span { font-size:10px; font-weight:500; color:var(--ink); }
+.dimension-header b { font:700 12px Manrope; color:var(--ink); }
+.dimension-bar { height:6px; background:rgba(0,0,0,0.06); border-radius:3px; overflow:hidden; margin-bottom:4px; }
+.dimension-bar i { display:block; height:100%; border-radius:3px; transition:width 0.3s ease; }
+
+.forecast-panel { padding:16px; background:var(--surface); border:1px solid var(--line); border-radius:8px; }
+.forecast-badge { display:inline-flex; align-items:center; gap:4px; padding:2px 7px; border-radius:4px; font-size:10px; font-weight:600; }
+.forecast-badge.on_track { background:#d1fae5; color:#065f46; }
+.forecast-badge.at_risk_of_delay { background:#fef3c7; color:#92400e; }
+.forecast-badge.likely_delayed { background:#fee2e2; color:#991b1b; }
+.forecast-badge.insufficient_data { background:var(--soft); color:#6b7280; }
+
+.history-sparkline-row { display:flex; align-items:flex-end; gap:6px; height:60px; padding:8px 0; }
+.history-bar { flex:1; background:#8275d5; border-radius:2px; min-height:4px; transition:height 0.2s ease; position:relative; }
+.history-bar:hover { background:#6a5bd7; }
+
+.risk-cards-list { display:grid; gap:10px; }
+.risk-item-card { padding:14px; background:var(--surface); border:1px solid var(--line); border-left:3px solid; border-radius:6px; display:flex; flex-direction:column; gap:8px; }
+.risk-item-card.critical { border-left-color:#ef4444; }
+.risk-item-card.high { border-left-color:#f97316; }
+.risk-item-card.medium { border-left-color:#eab308; }
+.risk-item-card.low { border-left-color:#3b82f6; }
+.risk-item-card.dismissed { opacity:0.65; border-left-color:#9ca3af; }
+
+.remedy-list { display:grid; gap:8px; }
+.remedy-item { display:flex; gap:10px; align-items:flex-start; padding:10px; background:var(--soft); border-radius:6px; border:1px solid var(--line); }
+
