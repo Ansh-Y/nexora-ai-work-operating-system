@@ -296,6 +296,43 @@ describe('Google Workspace Integration & Security', () => {
 
       fetchSpy.mockRestore();
     });
+
+    it('handles upstream revocation endpoint failure gracefully (local disconnect succeeds, audit records not_confirmed)', async () => {
+      const encryptedAccess = encryptGoogleSecret('valid-access-token', testKey);
+      mockPrisma.googleConnection.findUnique.mockResolvedValue({
+        id: 'conn-1',
+        organizationId: mockUser.orgId,
+        googleEmail: 'lead@nexora.internal',
+        accessTokenCiphertext: encryptedAccess,
+      });
+
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+        return new Response('Upstream server error', { status: 500 });
+      });
+
+      const result = await oauthService.disconnect(mockUser);
+      expect(result.disconnected).toBe(true);
+      expect(result.remoteRevocation).toBe('not_confirmed');
+
+      // Local connection still deleted
+      expect(mockPrisma.googleConnection.delete).toHaveBeenCalledWith({
+        where: { organizationId: mockUser.orgId },
+      });
+
+      // Audit event records not_confirmed
+      expect(mockPrisma.auditEvent.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            action: 'google.disconnected',
+            metadata: expect.objectContaining({
+              remoteRevocation: 'not_confirmed',
+            }),
+          }),
+        }),
+      );
+
+      fetchSpy.mockRestore();
+    });
   });
 
   describe('Google Calendar Service & Incremental Sync', () => {
@@ -502,6 +539,418 @@ describe('Google Workspace Integration & Security', () => {
           }),
         }),
       );
+    });
+
+    it('adheres to Google exclusive all-day end dates and preserves date metadata without day shifting', async () => {
+      mockPrisma.googleConnection.findUnique.mockResolvedValue({
+        id: 'conn-1',
+        organizationId: mockUser.orgId,
+        calendarSyncToken: null,
+      });
+
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+        return new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: 'evt-single-day',
+                summary: 'Quarterly Planning Day',
+                start: { date: '2026-11-10' },
+                end: { date: '2026-11-11' },
+                status: 'confirmed',
+              },
+              {
+                id: 'evt-multi-day',
+                summary: 'Design Sprint',
+                start: { date: '2026-11-10' },
+                end: { date: '2026-11-13' },
+                status: 'confirmed',
+              },
+            ],
+            nextSyncToken: 'token-all-day-test',
+          }),
+          { status: 200 },
+        );
+      });
+
+      const result = await calendarService.syncCalendar(mockUser, mockUser.orgId, true);
+      expect(result.syncedCount).toBe(2);
+
+      // Verify single-day event: starts at 2026-11-10 00:00:00 UTC and ends at 2026-11-10 23:59:59.999 UTC
+      expect(mockPrisma.googleCalendarEvent.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            googleEventId: 'evt-single-day',
+            startsAt: new Date('2026-11-10T00:00:00.000Z'),
+            endsAt: new Date('2026-11-10T23:59:59.999Z'),
+            isAllDay: true,
+            metadata: {
+              originalStartDate: '2026-11-10',
+              originalEndDate: '2026-11-10',
+              timeZone: null,
+              isAllDay: true,
+            },
+          }),
+        }),
+      );
+
+      // Verify multi-day event: starts at 2026-11-10 00:00:00 UTC and ends at 2026-11-12 23:59:59.999 UTC
+      expect(mockPrisma.googleCalendarEvent.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            googleEventId: 'evt-multi-day',
+            startsAt: new Date('2026-11-10T00:00:00.000Z'),
+            endsAt: new Date('2026-11-12T23:59:59.999Z'),
+            isAllDay: true,
+            metadata: {
+              originalStartDate: '2026-11-10',
+              originalEndDate: '2026-11-12',
+              timeZone: null,
+              isAllDay: true,
+            },
+          }),
+        }),
+      );
+
+      fetchSpy.mockRestore();
+    });
+
+    it('correctly parses timed events with positive and negative timezone offsets and preserves timezone in metadata', async () => {
+      mockPrisma.googleConnection.findUnique.mockResolvedValue({
+        id: 'conn-1',
+        organizationId: mockUser.orgId,
+        calendarSyncToken: null,
+      });
+
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+        return new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: 'evt-tokyo',
+                summary: 'Asia Standup',
+                start: { dateTime: '2026-11-10T09:00:00+09:00', timeZone: 'Asia/Tokyo' },
+                end: { dateTime: '2026-11-10T10:00:00+09:00', timeZone: 'Asia/Tokyo' },
+                status: 'confirmed',
+              },
+              {
+                id: 'evt-sf',
+                summary: 'US Pacific Review',
+                start: { dateTime: '2026-11-10T16:00:00-08:00', timeZone: 'America/Los_Angeles' },
+                end: { dateTime: '2026-11-10T17:00:00-08:00', timeZone: 'America/Los_Angeles' },
+                status: 'confirmed',
+              },
+            ],
+            nextSyncToken: 'token-tz-test',
+          }),
+          { status: 200 },
+        );
+      });
+
+      const result = await calendarService.syncCalendar(mockUser, mockUser.orgId, true);
+      expect(result.syncedCount).toBe(2);
+
+      // Tokyo +09:00 (09:00 Tokyo -> 00:00 UTC)
+      expect(mockPrisma.googleCalendarEvent.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            googleEventId: 'evt-tokyo',
+            startsAt: new Date('2026-11-10T00:00:00.000Z'),
+            endsAt: new Date('2026-11-10T01:00:00.000Z'),
+            isAllDay: false,
+            metadata: {
+              originalStartDate: null,
+              originalEndDate: null,
+              timeZone: 'Asia/Tokyo',
+              isAllDay: false,
+            },
+          }),
+        }),
+      );
+
+      // SF -08:00 (16:00 SF on Nov 10 -> 00:00 UTC on Nov 11)
+      expect(mockPrisma.googleCalendarEvent.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            googleEventId: 'evt-sf',
+            startsAt: new Date('2026-11-11T00:00:00.000Z'),
+            endsAt: new Date('2026-11-11T01:00:00.000Z'),
+            isAllDay: false,
+            metadata: {
+              originalStartDate: null,
+              originalEndDate: null,
+              timeZone: 'America/Los_Angeles',
+              isAllDay: false,
+            },
+          }),
+        }),
+      );
+
+      fetchSpy.mockRestore();
+    });
+
+    it('handles events spanning daylight saving time boundaries with correct UTC offsets', async () => {
+      mockPrisma.googleConnection.findUnique.mockResolvedValue({
+        id: 'conn-1',
+        organizationId: mockUser.orgId,
+        calendarSyncToken: null,
+      });
+
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+        return new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: 'evt-dst-transition',
+                summary: 'US DST Fall-Back Meeting',
+                start: { dateTime: '2026-11-01T01:30:00-04:00', timeZone: 'America/New_York' },
+                end: { dateTime: '2026-11-01T02:30:00-05:00', timeZone: 'America/New_York' },
+                status: 'confirmed',
+              },
+            ],
+            nextSyncToken: 'token-dst-test',
+          }),
+          { status: 200 },
+        );
+      });
+
+      const result = await calendarService.syncCalendar(mockUser, mockUser.orgId, true);
+      expect(result.syncedCount).toBe(1);
+
+      expect(mockPrisma.googleCalendarEvent.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            googleEventId: 'evt-dst-transition',
+            startsAt: new Date('2026-11-01T05:30:00.000Z'),
+            endsAt: new Date('2026-11-01T07:30:00.000Z'),
+            metadata: {
+              originalStartDate: null,
+              originalEndDate: null,
+              timeZone: 'America/New_York',
+              isAllDay: false,
+            },
+          }),
+        }),
+      );
+
+      fetchSpy.mockRestore();
+    });
+
+    it('fetches all pages via pageToken and only commits nextSyncToken after final page succeeds', async () => {
+      mockPrisma.googleConnection.findUnique.mockResolvedValue({
+        id: 'conn-1',
+        organizationId: mockUser.orgId,
+        calendarSyncToken: 'sync-tok-123',
+      });
+
+      const urlsRequested: string[] = [];
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
+        const u = String(url);
+        urlsRequested.push(u);
+        if (u.includes('pageToken=token-page-2')) {
+          return new Response(
+            JSON.stringify({
+              items: [
+                { id: 'evt-page-2', summary: 'Page 2 Event', start: { dateTime: '2026-11-15T10:00:00Z' } },
+              ],
+              nextSyncToken: 'final-sync-token-from-page-2',
+            }),
+            { status: 200 },
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            items: [
+              { id: 'evt-page-1a', summary: 'Page 1 Event A', start: { dateTime: '2026-11-14T09:00:00Z' } },
+              { id: 'evt-page-1b', summary: 'Page 1 Event B', start: { dateTime: '2026-11-14T11:00:00Z' } },
+            ],
+            nextPageToken: 'token-page-2',
+          }),
+          { status: 200 },
+        );
+      });
+
+      const result = await calendarService.syncCalendar(mockUser, mockUser.orgId, false);
+      expect(result.syncedCount).toBe(3);
+      expect(urlsRequested).toHaveLength(2);
+
+      // Verify page 1 had syncToken
+      expect(urlsRequested[0]).toContain('syncToken=sync-tok-123');
+      expect(urlsRequested[0]).not.toContain('pageToken=');
+
+      // Verify page 2 had pageToken and DID NOT pass syncToken (Google API parameter mutual exclusion)
+      expect(urlsRequested[1]).toContain('pageToken=token-page-2');
+      expect(urlsRequested[1]).not.toContain('syncToken=');
+
+      // Verify final sync token committed
+      expect(mockPrisma.googleConnection.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            calendarSyncToken: 'final-sync-token-from-page-2',
+            calendarSyncStatus: 'SUCCESS',
+          }),
+        }),
+      );
+
+      fetchSpy.mockRestore();
+    });
+
+    it('does not advance calendarSyncToken if a subsequent page fails', async () => {
+      mockPrisma.googleConnection.findUnique.mockResolvedValue({
+        id: 'conn-1',
+        organizationId: mockUser.orgId,
+        calendarSyncToken: 'original-saved-token',
+      });
+
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
+        const u = String(url);
+        if (u.includes('pageToken=token-page-2')) {
+          return new Response('Internal Google Server Error', { status: 500 });
+        }
+        return new Response(
+          JSON.stringify({
+            items: [
+              { id: 'evt-page-1', summary: 'First Page Event', start: { dateTime: '2026-11-14T09:00:00Z' } },
+            ],
+            nextPageToken: 'token-page-2',
+          }),
+          { status: 200 },
+        );
+      });
+
+      await expect(calendarService.syncCalendar(mockUser, mockUser.orgId, false)).rejects.toThrow();
+
+      // Transaction was NOT committed: calendarSyncStatus SUCCESS was never written
+      expect(mockPrisma.googleConnection.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            calendarSyncStatus: 'SUCCESS',
+          }),
+        }),
+      );
+
+      // Failure recorded
+      expect(mockPrisma.googleConnection.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            calendarSyncStatus: 'FAILED',
+          }),
+        }),
+      );
+
+      fetchSpy.mockRestore();
+    });
+
+    it('idempotently updates events without duplication on sync retry', async () => {
+      mockPrisma.googleConnection.findUnique.mockResolvedValue({
+        id: 'conn-1',
+        organizationId: mockUser.orgId,
+        calendarSyncToken: 'original-token',
+      });
+
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+        return new Response(
+          JSON.stringify({
+            items: [
+              { id: 'evt-existing', summary: 'Updated Title', start: { dateTime: '2026-11-15T10:00:00Z' } },
+            ],
+            nextSyncToken: 'successful-retry-sync-token',
+          }),
+          { status: 200 },
+        );
+      });
+
+      const result = await calendarService.syncCalendar(mockUser, mockUser.orgId, false);
+      expect(result.syncedCount).toBe(1);
+
+      // Upsert ensures idempotency by targeting unique constraint [organizationId, googleEventId]
+      expect(mockPrisma.googleCalendarEvent.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            organizationId_googleEventId: {
+              organizationId: mockUser.orgId,
+              googleEventId: 'evt-existing',
+            },
+          },
+          create: expect.objectContaining({ summary: 'Updated Title' }),
+          update: expect.objectContaining({ summary: 'Updated Title' }),
+        }),
+      );
+
+      fetchSpy.mockRestore();
+    });
+
+    it('skips concurrent duplicate sync jobs for the same organization', async () => {
+      mockPrisma.googleConnection.findUnique.mockResolvedValue({
+        id: 'conn-1',
+        organizationId: mockUser.orgId,
+        calendarSyncToken: null,
+      });
+
+      let resolveFetch!: (res: Response) => void;
+      const fetchPromise = new Promise<Response>(resolve => {
+        resolveFetch = resolve;
+      });
+
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+        return fetchPromise;
+      });
+
+      // Start first sync (runs asynchronously)
+      const firstSyncPromise = calendarService.syncCalendar(mockUser, mockUser.orgId, true);
+
+      // Trigger concurrent second sync immediately
+      const secondSyncResult = await calendarService.syncCalendar(mockUser, mockUser.orgId, true);
+      expect(secondSyncResult.syncedCount).toBe(0);
+      expect(secondSyncResult.message).toContain('already in progress');
+
+      // Complete first sync
+      resolveFetch(
+        new Response(
+          JSON.stringify({
+            items: [{ id: 'evt-1', summary: 'First Event', start: { dateTime: '2026-11-16T10:00:00Z' } }],
+            nextSyncToken: 'token-after-lock',
+          }),
+          { status: 200 },
+        ),
+      );
+
+      const firstSyncResult = await firstSyncPromise;
+      expect(firstSyncResult.syncedCount).toBe(1);
+
+      fetchSpy.mockRestore();
+    });
+
+    it('always releases the concurrency lock when a sync throws an error', async () => {
+      mockPrisma.googleConnection.findUnique.mockResolvedValue({
+        id: 'conn-1',
+        organizationId: mockUser.orgId,
+        calendarSyncToken: null,
+      });
+
+      let syncRuns = 0;
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+        if (syncRuns === 0) {
+          return new Response('Fatal Google Calendar Error', { status: 500 });
+        }
+        return new Response(
+          JSON.stringify({
+            items: [{ id: 'evt-ok', summary: 'Recovered Event', start: { dateTime: '2026-11-17T10:00:00Z' } }],
+            nextSyncToken: 'token-after-exception',
+          }),
+          { status: 200 },
+        );
+      });
+
+      // First call throws ServiceUnavailableException
+      await expect(calendarService.syncCalendar(mockUser, mockUser.orgId, true)).rejects.toThrow();
+
+      // Second call must NOT be blocked by stale lock
+      syncRuns = 1;
+      const secondResult = await calendarService.syncCalendar(mockUser, mockUser.orgId, true);
+      expect(secondResult.syncedCount).toBe(1);
+
+      fetchSpy.mockRestore();
     });
   });
 

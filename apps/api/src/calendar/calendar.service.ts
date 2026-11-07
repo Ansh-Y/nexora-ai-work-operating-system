@@ -38,7 +38,20 @@ export class CalendarService {
       this.prisma.project.findMany({ where: { organizationId: user.orgId, archivedAt: null, ...(query.projectId ? { id: query.projectId } : {}), ...(query.memberId ? { ownerId: query.memberId } : {}), OR: [{ startDate: interval }, { dueDate: interval }, { startDate: { lte: from }, dueDate: { gte: from } }] }, select: { id: true, name: true, status: true, startDate: true, dueDate: true, ownerId: true, owner: { select: { name: true } } }, take: 500 }),
       this.prisma.milestone.findMany({ where: { organizationId: user.orgId, ...projectWhere, ...(query.memberId ? { project: { ownerId: query.memberId } } : {}), targetDate: interval }, include: { project: { select: { id: true, name: true, ownerId: true, owner: { select: { name: true } } } } }, take: 1000 }),
       this.prisma.meeting.findMany({ where: { organizationId: user.orgId, archivedAt: null, ...projectWhere, ...(query.memberId ? { participants: { some: { organizationId: user.orgId, userId: query.memberId } } } : {}), startsAt: interval, ...(query.status && Object.values(MeetingStatus).includes(query.status as MeetingStatus) ? { status: query.status as MeetingStatus } : {}) }, include: { project: { select: { id: true, name: true } }, participants: { where: { organizationId: user.orgId }, include: { user: { select: { id: true, name: true } } } } }, take: 500 }),
-      this.prisma.googleCalendarEvent.findMany({ where: { organizationId: user.orgId, status: { not: 'cancelled' }, ...projectWhere, startsAt: interval }, include: { project: { select: { id: true, name: true } } }, take: 500 }),
+      this.prisma.googleCalendarEvent.findMany({
+        where: {
+          organizationId: user.orgId,
+          status: { not: 'cancelled' },
+          ...projectWhere,
+          OR: [
+            { startsAt: interval },
+            { endsAt: interval },
+            { startsAt: { lte: from }, endsAt: { gte: from } },
+          ],
+        },
+        include: { project: { select: { id: true, name: true } } },
+        take: 500,
+      }),
     ]);
 
     const scopedProjectIds = [...new Set(tasks.map(task => task.projectId))];
@@ -59,7 +72,7 @@ export class CalendarService {
       ...projects.map(project => ({ id: project.id, type: 'project' as const, title: project.name, date: project.dueDate ?? project.startDate, startDate: project.startDate ?? project.dueDate!, endDate: project.dueDate ?? project.startDate!, status: project.status, projectId: project.id, projectName: project.name, assigneeId: project.ownerId, assigneeName: project.owner.name, blockedBy: [], criticalPath: false })),
       ...milestones.map(milestone => ({ id: milestone.id, type: 'milestone' as const, title: milestone.title, date: milestone.targetDate, startDate: milestone.targetDate, endDate: milestone.targetDate, status: milestone.completedAt ? 'COMPLETED' : 'OPEN', projectId: milestone.projectId, projectName: milestone.project.name, assigneeId: milestone.project.ownerId, assigneeName: milestone.project.owner.name, blockedBy: [], criticalPath: false })),
       ...meetings.map(meeting => ({ id: meeting.id, type: 'meeting' as const, title: meeting.title, date: meeting.startsAt, startDate: meeting.startsAt, endDate: meeting.durationMinutes && meeting.startsAt ? new Date(meeting.startsAt.getTime() + meeting.durationMinutes * 60000) : meeting.startsAt, status: meeting.status, projectId: meeting.projectId, projectName: meeting.project?.name ?? 'Workspace', assigneeId: null, assigneeName: null, participantIds: meeting.participants.map(row => row.user.id), participants: meeting.participants.map(row => row.user.name), blockedBy: [], criticalPath: false })),
-      ...googleEvents.map(event => ({ id: event.id, type: 'meeting' as const, title: event.summary, date: event.startsAt, startDate: event.startsAt, endDate: event.endsAt, status: event.status.toUpperCase(), projectId: event.projectId, projectName: event.project?.name ?? 'Google Calendar', assigneeId: null, assigneeName: event.organizerEmail ?? null, participantIds: [], participants: Array.isArray(event.attendees) ? (event.attendees as any[]).map(a => a.displayName || a.email).filter(Boolean) : [], blockedBy: [], criticalPath: false, source: 'google_calendar' as const, htmlLink: event.htmlLink })),
+      ...googleEvents.map(event => ({ id: event.id, type: 'meeting' as const, title: event.summary, date: event.startsAt, startDate: event.startsAt, endDate: event.endsAt, status: event.status.toUpperCase(), projectId: event.projectId, projectName: event.project?.name ?? 'Google Calendar', assigneeId: null, assigneeName: event.organizerEmail ?? null, participantIds: [], participants: Array.isArray(event.attendees) ? (event.attendees as any[]).map(a => a.displayName || a.email).filter(Boolean) : [], blockedBy: [], criticalPath: false, source: 'google_calendar' as const, htmlLink: event.htmlLink, isAllDay: event.isAllDay, metadata: event.metadata })),
     ].filter(event => !query.status || event.status === query.status).sort((a, b) => (a.date?.getTime() ?? 0) - (b.date?.getTime() ?? 0));
     return { from, to, events: output };
   }

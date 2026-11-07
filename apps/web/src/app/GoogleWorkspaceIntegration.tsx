@@ -173,8 +173,12 @@ export default function GoogleWorkspaceIntegration({
     setBusy(true);
     setError("");
     try {
-      await api.post("/integrations/google/disconnect", {});
-      notify("Google Workspace disconnected.");
+      const res = (await api.post("/integrations/google/disconnect", {})) as { disconnected?: boolean; remoteRevocation?: string };
+      if (res?.remoteRevocation === 'not_confirmed') {
+        notify("Google Workspace disconnected locally. Note: Upstream Google token revocation could not be confirmed.");
+      } else {
+        notify("Google Workspace disconnected and upstream OAuth access revoked.");
+      }
       await reloadAll();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Failed to disconnect Google Workspace.");

@@ -9,7 +9,7 @@ describe('GitHub integration security helpers', () => {
     const encrypted = encryptGithubSecret('gho_private-token', key);
     expect(encrypted).not.toContain('gho_private-token');
     expect(decryptGithubSecret(encrypted, key)).toBe('gho_private-token');
-    expect(() => decryptGithubSecret(`${encrypted.slice(0, -1)}${encrypted.endsWith('x') ? 'y' : 'x'}`, key)).toThrow();
+    expect(() => decryptGithubSecret(`${encrypted.slice(0, 20)}${encrypted[20] === 'a' ? 'b' : 'a'}${encrypted.slice(21)}`, key)).toThrow();
   });
 
   it('creates high entropy state values and stores only stable hashes', () => {

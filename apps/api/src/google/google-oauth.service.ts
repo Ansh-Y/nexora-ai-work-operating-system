@@ -326,7 +326,7 @@ export class GoogleOAuthService {
     });
 
     if (!stored) {
-      return { disconnected: true };
+      return { disconnected: true, remoteRevocation: 'not_confirmed' as const };
     }
 
     let remoteRevocation = false;
@@ -346,6 +346,8 @@ export class GoogleOAuthService {
       // Local removal proceeds regardless of upstream revoke failure
     }
 
+    const revocationStatus = remoteRevocation ? 'revoked' : 'not_confirmed';
+
     await this.prisma.$transaction(async tx => {
       await tx.googleConnection.delete({
         where: { organizationId: user.orgId },
@@ -360,7 +362,7 @@ export class GoogleOAuthService {
           targetId: stored.id,
           metadata: {
             googleEmail: stored.googleEmail,
-            remoteRevocation,
+            remoteRevocation: revocationStatus,
           },
         },
       });
@@ -370,7 +372,7 @@ export class GoogleOAuthService {
       connected: false,
     });
 
-    return { disconnected: true, remoteRevocation: remoteRevocation ? 'revoked' : 'not_confirmed' };
+    return { disconnected: true, remoteRevocation: revocationStatus };
   }
 
   async getValidAccessToken(organizationId: string): Promise<string> {

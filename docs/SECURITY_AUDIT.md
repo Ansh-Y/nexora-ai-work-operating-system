@@ -219,5 +219,44 @@ Additive migration `20261107130000_google_workspace_integration` was applied to 
 | `npm run test:browser` | Passed: 1 Playwright browser journey |
 | `npm audit --omit=dev` | Passed: 0 vulnerabilities |
 
+## Release 3 Step 3.1 — Google Workspace Reliability Hardening (2026-11-07)
+
+Release 3 Step 3.1 hardens Google Workspace synchronization, calendar timezone calculations, multi-page pagination recovery, distributed concurrency coordination, and OAuth disconnect observability without requiring database schema alterations or broadening OAuth scopes.
+
+### 1. Calendar Timezone Correctness & All-Day Event Semantics
+- **Exclusive End Date Normalization**: In accordance with Google Calendar API conventions, all-day events specify exclusive end dates (e.g. `start: { date: '2026-11-10' }, end: { date: '2026-11-11' }` for a 1-day event). The synchronization engine computes inclusive `endsAt` as 1 millisecond before exclusive midnight (`2026-11-10T23:59:59.999Z`), preventing 1-day events from erroneously spanning multiple days.
+- **Original Date Metadata Preservation**: Stores `originalStartDate`, `originalEndDate`, `timeZone`, and `isAllDay` in `GoogleCalendarEvent.metadata` on both `create` and `update` upsert operations.
+- **Client-Side Rendering Integrity**: In `CalendarWorkspace.tsx`, all-day event matching in `eventsForDay` extracts the date key directly from `originalStartDate` / `originalEndDate` or ISO date string prefixes, ensuring that users in timezones West of UTC (e.g., US EST UTC-5, PST UTC-8) or East of UTC view all-day events on the exact intended calendar date without shifting to adjacent days.
+- **Timed Events & Daylight Saving Transitions**: Timed RFC3339 strings preserve timezone offsets during UTC conversion, and events spanning daylight saving boundaries (such as US Fall-Back) calculate exact UTC durations while retaining IANA time zone identifiers in metadata.
+
+### 2. Multi-Page Calendar Pagination & Partial-Sync Protection
+- **RFC-Compliant Parameter Mutex**: In multi-page responses, `nextPageToken` is passed while omitting `syncToken` and `timeMin`, strictly complying with Google Calendar API parameter mutual exclusion rules.
+- **Atomic Sync Token Advancement**: Sync tokens (`nextSyncToken`) are only committed to `GoogleConnection.calendarSyncToken` in a transaction after all pages are completely retrieved and upserted. If any page fails (HTTP error or network timeout), the transaction is aborted, and the stored `calendarSyncToken` is never advanced to an uncommitted state.
+- **Idempotent Retry**: Re-running a partially failed sync operates safely and idempotently via upserts on the `@unique([organizationId, googleEventId])` constraint without creating duplicate events or wiping project associations.
+- **HTTP 410 Gone Recovery**: Invalid or expired sync tokens cleanly reset `calendarSyncToken: null`, clear partial state, and trigger an automatic full synchronization without dropping workspace project associations or tracked meetings.
+
+### 3. Synchronization Concurrency & Distributed Coordination
+- **Two-Tier Locking Strategy**:
+  1. *Distributed Coordination*: For multi-instance deployments when `REDIS_URL` is configured, an atomic distributed lock (`SET lock:google-sync:cal:<orgId> <token> NX PX 60000`) coordinates synchronization across backend instances and releases locks using an atomic Lua script.
+  2. *Process-Local Mutex*: A process-local `activeSyncs: Set<string>` guarantees mutual exclusion per process.
+- **Guaranteed Release Semantics**: Lock release is enclosed in a `finally` block, ensuring that both process-local and Redis distributed locks are released even if network exceptions or database errors occur.
+- **Graceful Redis Degradation & Multi-Instance Limitation**: If Redis is offline or unreachable, lock acquisition logs a warning and safely falls back to process-local locking.
+  *Documented Architecture Limitation*: In a multi-instance deployment without an active Redis cluster, concurrent sync triggers routed to different application containers operate under process-local mutexes and are not cross-synchronized across instances.
+
+### 4. OAuth Disconnect & Revocation Visibility
+- **Resilient Local Disconnect**: Disconnecting Google Workspace removes local credentials and deletes the `GoogleConnection` record in a transaction even if Google's upstream revocation endpoint (`https://oauth2.googleapis.com/revoke`) returns an error or times out.
+- **Distinct Status Visibility**: Disconnect returns `{ disconnected: true, remoteRevocation: 'revoked' | 'not_confirmed' }`. The audit trail records the exact revocation status, and the frontend UI explicitly notifies the user if upstream revocation could not be confirmed.
+- **Token Security**: No credentials or tokens are logged or returned in error messages or responses.
+
+### 5. Full Test Verification
+| Command | Result |
+|---|---|
+| `npm run build` | Passed: NestJS API and Next.js frontend built cleanly with 0 errors |
+| `npm test` | Passed: 10 test suites, 74 tests (including 24 Google Workspace security, OAuth, Calendar sync, and Gmail intelligence tests covering all 10 Step 3.1 hardening scenarios); frontend ESLint clean |
+| `npm run test:e2e` | Passed: 4 E2E test suites, 28 tests on isolated database |
+| `npm run test:browser` | Passed: 1 Playwright browser journey |
+| `npm audit --omit=dev` | Passed: 0 vulnerabilities |
+
+
 
 
