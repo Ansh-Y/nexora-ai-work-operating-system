@@ -28,14 +28,14 @@ test('Project Health & Predictive Risk dashboard lifecycle journey', async ({ pa
 
   // 3. Populate Project with tasks and milestones via UI
   // Add Task 1: Normal active task
-  await page.getByRole('button', { name: 'Add task' }).click();
+  await page.getByRole('main').getByRole('button', { name: 'Add task' }).click();
   await page.getByLabel('Task name').fill('Core Architecture Setup');
   await page.getByLabel('Priority').selectOption('HIGH');
   await page.locator('form').getByRole('button', { name: 'Add task' }).click();
   await expect(page.getByText('Core Architecture Setup')).toBeVisible();
 
   // Add Task 2: Critical overdue task to trigger risk rules
-  await page.getByRole('button', { name: 'Add task' }).click();
+  await page.getByRole('main').getByRole('button', { name: 'Add task' }).click();
   await page.getByLabel('Task name').fill('Security Critical Review');
   await page.getByLabel('Priority').selectOption('URGENT');
   // Past due date

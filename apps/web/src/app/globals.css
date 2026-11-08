@@ -5444,6 +5444,308 @@ button:disabled {
   font-weight: 500;
 }
 
+/* Subtitle bar with Add task button */
+.proposal-section-subtitle-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.add-task-top-btn {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Editable Task Title Input */
+.review-task-title-input {
+  flex: 1;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 8px;
+  margin: -4px -8px;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.review-task-title-input:hover {
+  background: var(--panel-subtle);
+  border-color: var(--line);
+}
+
+.review-task-title-input:focus {
+  background: var(--panel-subtle);
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(72, 201, 176, 0.15);
+}
+
+/* Priority Select */
+.priority-select {
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 5px;
+  padding: 3px 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-family: inherit;
+  transition: all 0.15s ease;
+}
+
+.priority-select.high,
+.priority-select.urgent {
+  background: rgba(224, 86, 74, 0.15);
+  color: #ff6b6b;
+  border-color: rgba(224, 86, 74, 0.3);
+}
+
+.priority-select.medium {
+  background: rgba(213, 166, 90, 0.15);
+  color: #e5b358;
+  border-color: rgba(213, 166, 90, 0.3);
+}
+
+.priority-select.low {
+  background: rgba(72, 201, 176, 0.15);
+  color: #48C9B0;
+  border-color: rgba(72, 201, 176, 0.3);
+}
+
+.task-delete-btn {
+  color: var(--muted);
+  padding: 4px;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.task-delete-btn:hover {
+  color: #ff6b6b;
+  background: rgba(224, 86, 74, 0.15);
+}
+
+/* Editable Description Input */
+.review-task-desc-input {
+  width: 100%;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 6px;
+  margin: -4px -6px;
+  resize: vertical;
+  min-height: 38px;
+  font-family: inherit;
+  transition: all 0.15s ease;
+}
+
+.review-task-desc-input:hover {
+  background: var(--panel-subtle);
+  border-color: var(--line);
+}
+
+.review-task-desc-input:focus {
+  background: var(--panel-subtle);
+  border-color: var(--accent);
+  color: var(--text);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(72, 201, 176, 0.15);
+}
+
+/* Meta Bar Controls */
+.review-meta-select-wrap,
+.review-meta-date-wrap,
+.review-meta-milestone-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.review-assignee-select,
+.review-milestone-select {
+  font-size: 11px;
+  background: var(--panel-subtle);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.review-assignee-select:focus,
+.review-milestone-select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.review-date-input {
+  font-size: 11px;
+  background: var(--panel-subtle);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: inherit;
+  color-scheme: dark;
+}
+
+.review-date-input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.role-pill {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(72, 201, 176, 0.1);
+  color: #48C9B0;
+  border: 1px solid rgba(72, 201, 176, 0.25);
+}
+
+.duration-pill {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--panel-subtle);
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+
+/* Dependencies Row */
+.review-task-deps-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11.5px;
+  padding-top: 6px;
+  color: var(--muted);
+}
+
+.deps-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.deps-chips-wrap {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dep-chip-interactive {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(213, 166, 90, 0.12);
+  border: 1px solid rgba(213, 166, 90, 0.28);
+  color: #e5b358;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.dep-remove-btn {
+  background: transparent;
+  border: none;
+  color: #e5b358;
+  cursor: pointer;
+  padding: 1px;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.dep-remove-btn:hover {
+  background: rgba(224, 86, 74, 0.2);
+  color: #ff6b6b;
+}
+
+.dep-empty-hint {
+  font-size: 11px;
+  color: var(--muted-soft, #6b7d88);
+  font-style: italic;
+}
+
+.add-dep-select {
+  font-size: 10.5px;
+  background: transparent;
+  border: 1px dashed var(--line-strong);
+  color: var(--muted);
+  border-radius: 4px;
+  padding: 2px 5px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.add-dep-select:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+/* Risks Card */
+.risks-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  background: rgba(224, 86, 74, 0.1);
+  border: 1px solid rgba(224, 86, 74, 0.3);
+  border-radius: 8px;
+}
+
+.risks-icon {
+  color: #ff6b6b;
+  margin-top: 2px;
+}
+
+.risks-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.risks-text b {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.risks-text p {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+  margin: 0;
+}
+
 /* Review Modal Footer */
 .plan-modal-footer,
 .review-footer {

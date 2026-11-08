@@ -9,3 +9,8 @@ export class PlanDto {
 export class AskDto {
   @IsString() @MinLength(3) @MaxLength(2000) question!: string;
 }
+
+export class ApprovePlanDto {
+  @IsOptional()
+  plan?: any;
+}

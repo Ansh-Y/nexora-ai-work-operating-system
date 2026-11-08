@@ -96,6 +96,9 @@ type PlanTask = {
   dueDate?: string | null;
   assigneeId?: string | null;
   blockedBy: number[];
+  suggestedRole?: string | null;
+  estimatedDurationDays?: number | null;
+  milestoneIndex?: number | null;
 };
 type Proposal = {
   id: string;
@@ -105,8 +108,9 @@ type Proposal = {
   proposed: {
     projectName: string;
     projectDescription: string;
-    milestones: { title: string; targetDate?: string | null }[];
+    milestones: { title: string; targetDate?: string | null; description?: string | null; sequence?: number | null }[];
     assumptions: string[];
+    risks?: string[];
     tasks: PlanTask[];
   };
   status: string;
@@ -716,7 +720,10 @@ export default function Home() {
     if (!proposal) return;
     setBusy(true);
     try {
-      const res: any = await api.post(`/ai/proposals/${proposal.id}/${approved ? "approve" : "reject"}`, {});
+      const res: any = await api.post(
+        `/ai/proposals/${proposal.id}/${approved ? "approve" : "reject"}`,
+        approved ? { plan: proposal.proposed } : {}
+      );
       if (approved) {
         setActiveProjectId(res.project.id);
         await refreshProjects(res.project.id);
@@ -733,6 +740,110 @@ export default function Home() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function updateProposalTask(index: number, field: keyof PlanTask, value: any) {
+    if (!proposal) return;
+    setProposal(prev => {
+      if (!prev) return null;
+      const newTasks = [...prev.proposed.tasks];
+      newTasks[index] = { ...newTasks[index], [field]: value };
+      return {
+        ...prev,
+        proposed: {
+          ...prev.proposed,
+          tasks: newTasks,
+        },
+      };
+    });
+  }
+
+  function addProposalTask(milestoneIndex = 0) {
+    if (!proposal) return;
+    setProposal(prev => {
+      if (!prev) return null;
+      const newTask: PlanTask = {
+        title: "Implement new deliverable",
+        description: "",
+        priority: "MEDIUM",
+        dueDate: prev.proposed.milestones[milestoneIndex]?.targetDate ?? null,
+        assigneeId: null,
+        blockedBy: [],
+        suggestedRole: "Fullstack Engineer",
+        estimatedDurationDays: 3,
+        milestoneIndex,
+      };
+      return {
+        ...prev,
+        proposed: {
+          ...prev.proposed,
+          tasks: [...prev.proposed.tasks, newTask],
+        },
+      };
+    });
+  }
+
+  function removeProposalTask(index: number) {
+    if (!proposal) return;
+    setProposal(prev => {
+      if (!prev) return null;
+      const newTasks = prev.proposed.tasks
+        .filter((_, i) => i !== index)
+        .map(t => ({
+          ...t,
+          blockedBy: t.blockedBy
+            .filter(b => b !== index)
+            .map(b => (b > index ? b - 1 : b)),
+        }));
+      return {
+        ...prev,
+        proposed: {
+          ...prev.proposed,
+          tasks: newTasks,
+        },
+      };
+    });
+  }
+
+  function addProposalDependency(taskIndex: number, blockerIndex: number) {
+    if (!proposal || taskIndex === blockerIndex) return;
+    setProposal(prev => {
+      if (!prev) return null;
+      const task = prev.proposed.tasks[taskIndex];
+      if (task.blockedBy.includes(blockerIndex)) return prev;
+      const newTasks = [...prev.proposed.tasks];
+      newTasks[taskIndex] = {
+        ...task,
+        blockedBy: [...task.blockedBy, blockerIndex],
+      };
+      return {
+        ...prev,
+        proposed: {
+          ...prev.proposed,
+          tasks: newTasks,
+        },
+      };
+    });
+  }
+
+  function removeProposalDependency(taskIndex: number, blockerIndex: number) {
+    if (!proposal) return;
+    setProposal(prev => {
+      if (!prev) return null;
+      const task = prev.proposed.tasks[taskIndex];
+      const newTasks = [...prev.proposed.tasks];
+      newTasks[taskIndex] = {
+        ...task,
+        blockedBy: task.blockedBy.filter(b => b !== blockerIndex),
+      };
+      return {
+        ...prev,
+        proposed: {
+          ...prev.proposed,
+          tasks: newTasks,
+        },
+      };
+    });
   }
 
   async function getReport() {
@@ -3172,33 +3283,169 @@ export default function Home() {
                     </div>
                   )}
 
-                  <div className="review-task-section">
-                    <div className="proposal-section-subtitle">
-                      <List size={13} /> Proposed Task Breakdown ({proposal.proposed.tasks.length})
+                  {proposal.proposed.risks && proposal.proposed.risks.length > 0 && (
+                    <div className="risks-note">
+                      <div className="risks-icon"><AlertTriangle size={16} /></div>
+                      <div className="risks-text">
+                        <b>Identified delivery risks</b>
+                        <p>{proposal.proposed.risks.join(" • ")}</p>
+                      </div>
                     </div>
+                  )}
+
+                  <div className="review-task-section">
+                    <div className="proposal-section-subtitle-bar">
+                      <div className="proposal-section-subtitle">
+                        <List size={13} /> Proposed Task Breakdown ({proposal.proposed.tasks.length})
+                      </div>
+                      <button
+                        type="button"
+                        className="button button-secondary button-small add-task-top-btn"
+                        onClick={() => addProposalTask(0)}
+                      >
+                        <Plus size={13} /> Add task
+                      </button>
+                    </div>
+
                     <div className="review-task-list">
                       {proposal.proposed.tasks.map((t, i) => (
                         <div className="review-task review-task-card" key={i}>
                           <div className="review-task-head">
                             <span className="review-index">#{String(i + 1).padStart(2, "0")}</span>
-                            <b className="review-task-title">{t.title}</b>
-                            <span className={`priority-label priority-pill ${(t.priority || "MEDIUM").toLowerCase()}`}>
-                              {t.priority || "MEDIUM"}
-                            </span>
+                            <input
+                              className="review-task-title-input review-task-title"
+                              value={t.title}
+                              onChange={e => updateProposalTask(i, "title", e.target.value)}
+                              placeholder="Task title (actionable verb)..."
+                            />
+                            <select
+                              className={`priority-select priority-pill ${(t.priority || "MEDIUM").toLowerCase()}`}
+                              value={t.priority || "MEDIUM"}
+                              onChange={e => updateProposalTask(i, "priority", e.target.value)}
+                            >
+                              <option value="LOW">LOW</option>
+                              <option value="MEDIUM">MEDIUM</option>
+                              <option value="HIGH">HIGH</option>
+                              <option value="URGENT">URGENT</option>
+                            </select>
+                            <button
+                              type="button"
+                              className="icon-button task-delete-btn"
+                              title="Delete task"
+                              onClick={() => removeProposalTask(i)}
+                            >
+                              <X size={14} />
+                            </button>
                           </div>
-                          {t.description && <p className="review-task-desc">{t.description}</p>}
+
+                          <textarea
+                            className="review-task-desc-input review-task-desc"
+                            rows={2}
+                            value={t.description}
+                            onChange={e => updateProposalTask(i, "description", e.target.value)}
+                            placeholder="Add task description or acceptance criteria…"
+                          />
+
                           <div className="review-task-meta-bar">
-                            <span className="review-meta-item">
-                              <User size={12} /> {(t.assigneeId ? members.find(m => m.user.id === t.assigneeId)?.user.name : null) || "Proposed: Unassigned"}
-                            </span>
-                            <span className="review-meta-item">
-                              <Calendar size={12} /> {t.dueDate ? dueLabel(t.dueDate) : "No date set"}
-                            </span>
-                            {t.blockedBy?.length ? (
-                              <span className="review-meta-item dep-chip">
-                                <GitBranch size={12} /> Depends on #{t.blockedBy.map(x => x + 1).join(", #")}
+                            {t.suggestedRole && (
+                              <span className="review-meta-item role-pill">
+                                <User size={11} /> {t.suggestedRole}
                               </span>
-                            ) : null}
+                            )}
+                            <label className="review-meta-item review-meta-select-wrap">
+                              <User size={11} />
+                              <select
+                                className="review-assignee-select"
+                                value={t.assigneeId || ""}
+                                onChange={e => updateProposalTask(i, "assigneeId", e.target.value || null)}
+                              >
+                                <option value="">Assignee: Unassigned</option>
+                                {members.map(m => (
+                                  <option key={m.user.id} value={m.user.id}>
+                                    {m.user.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+
+                            <label className="review-meta-item review-meta-date-wrap">
+                              <Calendar size={11} />
+                              <input
+                                type="date"
+                                className="review-date-input"
+                                value={t.dueDate ? t.dueDate.slice(0, 10) : ""}
+                                onChange={e => updateProposalTask(i, "dueDate", e.target.value ? new Date(e.target.value).toISOString() : null)}
+                              />
+                            </label>
+
+                            {t.estimatedDurationDays && (
+                              <span className="review-meta-item duration-pill">
+                                <Clock size={11} /> {t.estimatedDurationDays}d
+                              </span>
+                            )}
+
+                            {proposal.proposed.milestones?.length > 0 && (
+                              <label className="review-meta-item review-meta-milestone-wrap">
+                                <Flag size={11} />
+                                <select
+                                  className="review-milestone-select"
+                                  value={typeof t.milestoneIndex === "number" ? t.milestoneIndex : ""}
+                                  onChange={e => updateProposalTask(i, "milestoneIndex", e.target.value !== "" ? Number(e.target.value) : null)}
+                                >
+                                  <option value="">No milestone</option>
+                                  {proposal.proposed.milestones.map((m, mIdx) => (
+                                    <option key={mIdx} value={mIdx}>
+                                      M{mIdx + 1}: {m.title.slice(0, 24)}…
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            )}
+                          </div>
+
+                          <div className="review-task-deps-row">
+                            <span className="deps-label"><GitBranch size={12} /> Dependencies:</span>
+                            {t.blockedBy?.length > 0 ? (
+                              <div className="deps-chips-wrap">
+                                {t.blockedBy.map(bIdx => (
+                                  <span className="dep-chip-interactive" key={bIdx}>
+                                    <span>#{bIdx + 1} {proposal.proposed.tasks[bIdx]?.title ? proposal.proposed.tasks[bIdx].title.slice(0, 22) + "…" : ""}</span>
+                                    <button
+                                      type="button"
+                                      className="dep-remove-btn"
+                                      onClick={() => removeProposalDependency(i, bIdx)}
+                                      title="Remove dependency"
+                                    >
+                                      <X size={10} />
+                                    </button>
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="dep-empty-hint">None (runs in parallel)</span>
+                            )}
+
+                            {proposal.proposed.tasks.length > 1 && (
+                              <select
+                                className="add-dep-select"
+                                value=""
+                                onChange={e => {
+                                  if (e.target.value !== "") {
+                                    addProposalDependency(i, Number(e.target.value));
+                                  }
+                                }}
+                              >
+                                <option value="">+ Add blocker</option>
+                                {proposal.proposed.tasks.map((candidate, cIdx) => {
+                                  if (cIdx === i || t.blockedBy?.includes(cIdx)) return null;
+                                  return (
+                                    <option key={cIdx} value={cIdx}>
+                                      Depends on #{cIdx + 1}: {candidate.title.slice(0, 28)}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                            )}
                           </div>
                         </div>
                       ))}
