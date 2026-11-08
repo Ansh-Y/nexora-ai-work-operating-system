@@ -3,11 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
+  AlertTriangle,
   ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
   Bell,
   Blocks,
+  Calendar,
   CalendarDays,
   Check,
   CheckCheck,
@@ -15,11 +17,13 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleHelp,
+  Clock,
   Clock3,
   Copy,
   ExternalLink,
   FileText,
   Filter,
+  Folder,
   GitBranch,
   HardDrive,
   LayoutDashboard,
@@ -41,6 +45,7 @@ import {
   Sparkles,
   Sun,
   Target,
+  User,
   Users,
   X,
   Zap,
@@ -1922,7 +1927,7 @@ export default function Home() {
 
               <div className="ai-hero">
                 <div className="ai-hero-copy">
-                  <div className="ai-orb"><Sparkles size={20} /></div>
+                  <div className="ai-orb"><Sparkles size={22} /></div>
                   <div className="eyebrow light">PLAN WITH CONTEXT</div>
                   <h2>From a brief to a<br />plan your team can trust.</h2>
                   <p>
@@ -1942,64 +1947,166 @@ export default function Home() {
                 <div className="ai-hero-preview">
                   <div className="preview-window">
                     <div className="preview-window-head">
-                      <span><i /> PLAN PREVIEW</span>
-                      <MoreHorizontal size={16} />
+                      <span><span className="preview-dot" /> PLAN PREVIEW</span>
+                      <span className="preview-badge">HUMAN-IN-THE-LOOP</span>
                     </div>
-                    <div className="preview-title">Launch your next product</div>
-                    <div className="preview-sub">A proposed sequence &middot; 6 tasks &middot; 2 milestones</div>
-                    <div className="preview-task">
-                      <span className="preview-check done"><Check size={12} /></span>
-                      <span>Define launch requirements</span>
-                      <small>HIGH</small>
-                    </div>
-                    <div className="preview-connector" />
-                    <div className="preview-task">
-                      <span className="preview-check"><i /></span>
-                      <span>Build core product experience</span>
-                      <small>MEDIUM</small>
-                    </div>
-                    <div className="preview-connector" />
-                    <div className="preview-task">
-                      <span className="preview-check"><i /></span>
-                      <span>Prepare rollout and QA</span>
-                      <small>MEDIUM</small>
-                    </div>
-                    <div className="preview-approval">
-                      <ShieldCheck size={14} /> Review required before creation
+                    <div className="preview-content">
+                      <div className="preview-title">Launch your next product</div>
+                      <div className="preview-sub">A proposed sequence &middot; 6 tasks &middot; 2 milestones</div>
+
+                      <div className="preview-tasks-list">
+                        <div className="preview-task-row">
+                          <div className="preview-task-main">
+                            <span className="preview-check done"><Check size={12} /></span>
+                            <span className="preview-task-title">Define launch requirements</span>
+                            <span className="priority-pill high">HIGH</span>
+                          </div>
+                          <div className="preview-task-meta">
+                            <span className="preview-meta-tag"><User size={11} /> Taylor Morgan</span>
+                            <span className="preview-meta-tag"><Calendar size={11} /> Due Nov 12</span>
+                            <span className="preview-meta-tag dep"><GitBranch size={11} /> Milestone 1</span>
+                          </div>
+                        </div>
+
+                        <div className="preview-task-row">
+                          <div className="preview-task-main">
+                            <span className="preview-check pending" />
+                            <span className="preview-task-title">Build core product experience</span>
+                            <span className="priority-pill medium">MEDIUM</span>
+                          </div>
+                          <div className="preview-task-meta">
+                            <span className="preview-meta-tag"><User size={11} /> Sarah Chen</span>
+                            <span className="preview-meta-tag"><Calendar size={11} /> Due Nov 18</span>
+                            <span className="preview-meta-tag dep"><GitBranch size={11} /> Depends on #1</span>
+                          </div>
+                        </div>
+
+                        <div className="preview-task-row">
+                          <div className="preview-task-main">
+                            <span className="preview-check pending" />
+                            <span className="preview-task-title">Prepare rollout and QA</span>
+                            <span className="priority-pill medium">MEDIUM</span>
+                          </div>
+                          <div className="preview-task-meta">
+                            <span className="preview-meta-tag"><User size={11} /> Alex Rivera</span>
+                            <span className="preview-meta-tag"><Calendar size={11} /> Due Nov 24</span>
+                            <span className="preview-meta-tag dep"><GitBranch size={11} /> Depends on #2</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="preview-approval">
+                        <ShieldCheck size={14} /> Review and approval required before workspace changes
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
 
               <div className="ai-tool-grid">
-                <button className="ai-tool-card" onClick={() => setModal("plan")}>
-                  <span className="ai-tool-icon violet"><Sparkles size={17} /></span>
+                <div
+                  className="ai-tool-card"
+                  onClick={() => setModal("plan")}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={e => e.key === "Enter" && setModal("plan")}
+                >
+                  <div className="ai-tool-header">
+                    <span className="ai-tool-icon violet"><Sparkles size={18} /></span>
+                    <span className="ai-tool-action-pill">Interactive</span>
+                  </div>
                   <b>Project brief to plan</b>
-                  <span>Draft milestones and sequenced tasks for approval.</span>
-                  <ArrowUpRight size={15} />
-                </button>
-                <button className="ai-tool-card" onClick={getBlockers}>
-                  <span className="ai-tool-icon amber"><Zap size={17} /></span>
+                  <p>Draft milestones, sequenced tasks, and dependency paths for manager approval.</p>
+                  <button
+                    className="button button-secondary small-button ai-card-button"
+                    type="button"
+                    onClick={e => {
+                      e.stopPropagation();
+                      setModal("plan");
+                    }}
+                  >
+                    Draft plan <ArrowRight size={13} />
+                  </button>
+                </div>
+
+                <div
+                  className="ai-tool-card"
+                  onClick={getBlockers}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={e => e.key === "Enter" && void getBlockers()}
+                >
+                  <div className="ai-tool-header">
+                    <span className="ai-tool-icon amber"><Zap size={18} /></span>
+                    <span className="ai-tool-action-pill">Live check</span>
+                  </div>
                   <b>Blocker detection</b>
-                  <span>
+                  <p>
                     {blockedCount || overdueCount
-                      ? `${blockedCount + overdueCount} potential risks in the selected project.`
-                      : "Find risks and see which work sits downstream."}
-                  </span>
-                  <ArrowUpRight size={15} />
-                </button>
-                <button className="ai-tool-card" onClick={getReport}>
-                  <span className="ai-tool-icon mint"><FileText size={17} /></span>
+                      ? `${blockedCount + overdueCount} potential risks found across current project tasks.`
+                      : "Find blocker paths and inspect which downstream work sits waiting."}
+                  </p>
+                  <button
+                    className="button button-secondary small-button ai-card-button"
+                    type="button"
+                    onClick={e => {
+                      e.stopPropagation();
+                      void getBlockers();
+                    }}
+                  >
+                    Scan blockers <ArrowRight size={13} />
+                  </button>
+                </div>
+
+                <div
+                  className="ai-tool-card"
+                  onClick={getReport}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={e => e.key === "Enter" && void getReport()}
+                >
+                  <div className="ai-tool-header">
+                    <span className="ai-tool-icon mint"><FileText size={18} /></span>
+                    <span className="ai-tool-action-pill">Weekly</span>
+                  </div>
                   <b>Weekly health report</b>
-                  <span>Completed work, overdue items, risks, and next steps.</span>
-                  <ArrowUpRight size={15} />
-                </button>
-                <button className="ai-tool-card" onClick={getDuplicates}>
-                  <span className="ai-tool-icon blue"><Blocks size={17} /></span>
-                  <b>Duplicate work</b>
-                  <span>Review similar tasks; no task is ever merged automatically.</span>
-                  <ArrowUpRight size={15} />
-                </button>
+                  <p>Synthesize completed work, overdue items, blocker risks, and prioritized next steps.</p>
+                  <button
+                    className="button button-secondary small-button ai-card-button"
+                    type="button"
+                    onClick={e => {
+                      e.stopPropagation();
+                      void getReport();
+                    }}
+                  >
+                    Generate report <ArrowRight size={13} />
+                  </button>
+                </div>
+
+                <div
+                  className="ai-tool-card"
+                  onClick={getDuplicates}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={e => e.key === "Enter" && void getDuplicates()}
+                >
+                  <div className="ai-tool-header">
+                    <span className="ai-tool-icon blue"><Blocks size={18} /></span>
+                    <span className="ai-tool-action-pill">Integrity</span>
+                  </div>
+                  <b>Duplicate work detection</b>
+                  <p>Scan for overlapping tasks across team backlogs; no task is merged automatically.</p>
+                  <button
+                    className="button button-secondary small-button ai-card-button"
+                    type="button"
+                    onClick={e => {
+                      e.stopPropagation();
+                      void getDuplicates();
+                    }}
+                  >
+                    Find duplicates <ArrowRight size={13} />
+                  </button>
+                </div>
               </div>
 
               <section className="panel approval-panel">
@@ -2033,7 +2140,7 @@ export default function Home() {
               </section>
 
               {/* Workspace Q&A */}
-              <section className="panel ai-assistant-panel" style={{ marginTop: "16px" }}>
+              <section className="panel ai-assistant-panel" style={{ marginTop: "20px" }}>
                 <div className="panel-head">
                   <div>
                     <div className="eyebrow"><Sparkles size={11} /> WORKSPACE Q&amp;A</div>
@@ -2041,45 +2148,73 @@ export default function Home() {
                   </div>
                   <span className="safe-label"><ShieldCheck size={13} /> Tenant-scoped sources</span>
                 </div>
-                <p className="muted-copy">
+                <p className="muted-copy" style={{ marginBottom: "16px" }}>
                   Questions use only workspace search results. Matching notes and meeting transcripts are treated as
                   source text, never instructions.
                 </p>
                 <form className="assistant-form" onSubmit={askWorkspace}>
-                  <input
-                    aria-label="Ask your workspace"
-                    minLength={3}
-                    maxLength={2000}
-                    value={assistantQuestion}
-                    onChange={e => setAssistantQuestion(e.target.value)}
-                    placeholder="What decision was made about the launch?"
-                  />
-                  <button
-                    className="button button-primary"
-                    disabled={assistantLoading || assistantQuestion.trim().length < 3}
-                  >
-                    {assistantLoading ? <LoaderCircle className="spin" size={14} /> : <Send size={14} />} Ask
-                  </button>
+                  <div className="assistant-input-row">
+                    <input
+                      aria-label="Ask your workspace"
+                      minLength={3}
+                      maxLength={2000}
+                      value={assistantQuestion}
+                      onChange={e => setAssistantQuestion(e.target.value)}
+                      placeholder="What decision was made about the launch?"
+                      className="assistant-input"
+                    />
+                    <button
+                      className="button button-primary assistant-submit-button"
+                      disabled={assistantLoading || assistantQuestion.trim().length < 3}
+                    >
+                      {assistantLoading ? <LoaderCircle className="spin" size={14} /> : <Send size={14} />} Ask
+                    </button>
+                  </div>
                 </form>
-                {assistantAnswer && (
-                  <div className="assistant-response">
-                    {assistantAnswer.answer ? (
-                      <p>{assistantAnswer.answer}</p>
-                    ) : (
-                      <div className="assistant-not-configured">{assistantAnswer.message}</div>
-                    )}
+
+                {assistantLoading && (
+                  <div className="assistant-loading-state">
+                    <LoaderCircle className="spin" size={18} />
+                    <span>Analyzing workspace records and citations…</span>
+                  </div>
+                )}
+
+                {assistantAnswer && !assistantLoading && (
+                  <div className="assistant-response-container">
+                    <div className="assistant-response-box">
+                      <div className="assistant-response-head">
+                        <Sparkles size={14} className="accent-icon" />
+                        <b>Workspace Intelligence Answer</b>
+                      </div>
+                      {assistantAnswer.answer ? (
+                        <p className="assistant-answer-text">{assistantAnswer.answer}</p>
+                      ) : (
+                        <div className="assistant-not-configured">{assistantAnswer.message}</div>
+                      )}
+                    </div>
+
                     {assistantAnswer.sources?.length > 0 && (
-                      <div className="assistant-citations">
-                        <b>{assistantAnswer.citations?.length ? "Sources" : "Matching sources"}</b>
-                        {assistantAnswer.sources.map((source: any) => (
-                          <button key={`${source.type}:${source.id}`} onClick={() => openSearchResult(source)}>
-                            <span>
-                              <b>{source.title}</b>
-                              <small>{source.type.replaceAll("_", " ")} &middot; {source.excerpt}</small>
-                            </span>
-                            <ArrowUpRight size={13} />
-                          </button>
-                        ))}
+                      <div className="assistant-citations-box">
+                        <div className="citations-head">
+                          <FileText size={13} />
+                          <b>{assistantAnswer.citations?.length ? "Cited Sources" : "Matching Reference Sources"}</b>
+                        </div>
+                        <div className="citations-grid">
+                          {assistantAnswer.sources.map((source: any) => (
+                            <button
+                              key={`${source.type}:${source.id}`}
+                              className="citation-card"
+                              onClick={() => openSearchResult(source)}
+                            >
+                              <div className="citation-card-top">
+                                <span className="citation-type-badge">{source.type.replaceAll("_", " ")}</span>
+                                <ArrowUpRight size={13} />
+                              </div>
+                              <b className="citation-title">{source.title}</b>
+                              {source.excerpt && <p className="citation-excerpt">{source.excerpt}</p>}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -2088,7 +2223,7 @@ export default function Home() {
 
               {/* Deterministic Signals */}
               {intelligence && (
-                <section className="panel intelligence-panel" style={{ marginTop: "16px" }}>
+                <section className="panel intelligence-panel" style={{ marginTop: "20px" }}>
                   <div className="panel-head">
                     <div>
                       <div className="eyebrow">DETERMINISTIC PROJECT INTELLIGENCE</div>
@@ -2099,44 +2234,50 @@ export default function Home() {
                       {new Date(intelligence.generatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
                     </span>
                   </div>
-                  <div className="intelligence-metrics">
+                  <div className="intelligence-metrics-grid">
                     {[
-                      ["At risk", intelligence.metrics.atRiskProjects],
-                      ["Overdue", intelligence.metrics.overdueTasks],
-                      ["Blocked", intelligence.metrics.blockedTasks],
-                      ["Unassigned critical", intelligence.metrics.unassignedCriticalTasks],
-                      ["Stale", intelligence.metrics.staleTasks],
-                      ["Date conflicts", intelligence.metrics.assignmentConflicts],
-                    ].map(([label, value]) => (
-                      <div key={label}>
-                        <b>{value}</b>
-                        <span>{label}</span>
+                      { label: "At risk", value: intelligence.metrics.atRiskProjects, danger: intelligence.metrics.atRiskProjects > 0 },
+                      { label: "Overdue", value: intelligence.metrics.overdueTasks, danger: intelligence.metrics.overdueTasks > 0 },
+                      { label: "Blocked", value: intelligence.metrics.blockedTasks, danger: intelligence.metrics.blockedTasks > 0 },
+                      { label: "Unassigned critical", value: intelligence.metrics.unassignedCriticalTasks, danger: intelligence.metrics.unassignedCriticalTasks > 0 },
+                      { label: "Stale", value: intelligence.metrics.staleTasks, danger: intelligence.metrics.staleTasks > 0 },
+                      { label: "Date conflicts", value: intelligence.metrics.assignmentConflicts, danger: intelligence.metrics.assignmentConflicts > 0 },
+                    ].map(metric => (
+                      <div className={`metric-signal-card ${metric.danger ? "signal-danger" : "signal-normal"}`} key={metric.label}>
+                        <div className="signal-top">
+                          <span className={`signal-indicator ${metric.danger ? "danger" : "normal"}`} />
+                          <span className="signal-label">{metric.label}</span>
+                        </div>
+                        <b className="signal-value">{metric.value}</b>
                       </div>
                     ))}
                   </div>
                   {intelligence.projects.some((item: any) => item.status !== "on_track") ? (
-                    <div className="intelligence-projects">
+                    <div className="intelligence-projects intelligence-projects-list">
                       {intelligence.projects
                         .filter((item: any) => item.status !== "on_track")
                         .slice(0, 8)
                         .map((item: any) => (
                           <button
                             key={item.id}
+                            className="intelligence-project-row"
                             onClick={() => {
                               setActiveProjectId(item.id);
                               setPage("My work");
                             }}
                           >
-                            <span className={`health-dot ${item.status === "at_risk" ? "risk" : "good"}`} />
-                            <span>
-                              <b>{item.name}</b>
-                              <small>
-                                {item.reasons.length
-                                  ? item.reasons.join(" · ")
-                                  : `${item.staleCount} stale task(s) · ${item.upcomingMilestones.length} milestone(s) due soon`}
-                              </small>
-                            </span>
-                            <em>{item.progress}% done</em>
+                            <div className="intel-proj-left">
+                              <span className={`health-dot ${item.status === "at_risk" ? "risk" : "good"}`} />
+                              <div className="intel-proj-text">
+                                <b className="intel-proj-name">{item.name}</b>
+                                <span className="intel-proj-reasons">
+                                  {item.reasons.length
+                                    ? item.reasons.join(" · ")
+                                    : `${item.staleCount} stale task(s) · ${item.upcomingMilestones.length} milestone(s) due soon`}
+                                </span>
+                              </div>
+                            </div>
+                            <span className="intel-proj-progress">{item.progress}% done</span>
                           </button>
                         ))}
                     </div>
@@ -2223,25 +2364,65 @@ export default function Home() {
                   </button>
                 </div>
                 {notificationItems.length ? (
-                  notificationItems.map((item: any) => (
-                    <button
-                      className={`inbox-item notification-inbox-item ${item.readAt ? "read" : "unread"}`}
-                      key={item.id}
-                      onClick={() => void readNotification(item.id)}
-                    >
-                      <span className={`notice-icon ${item.type === "RISK" || item.type === "DEADLINE" ? "amber" : "violet"}`}>
-                        {item.type === "RISK" ? <Zap size={15} /> : <Bell size={15} />}
-                      </span>
-                      <span>
-                        <b>{item.title}</b>
-                        <small>{item.body} &middot; {new Date(item.createdAt).toLocaleString()}</small>
-                      </span>
-                      <span className="notification-state">{item.readAt ? "Read" : "Unread"}</span>
-                    </button>
-                  ))
+                  <div className="inbox-list">
+                    {notificationItems.map((item: any) => {
+                      let bodyText = item.body || "";
+                      let relatedEntity = item.project?.name || project?.name || "";
+                      if (bodyText.includes(" · ")) {
+                        const parts = bodyText.split(" · ");
+                        bodyText = parts[0];
+                        if (parts[1]) relatedEntity = parts[1];
+                      }
+                      const isUnread = !item.readAt;
+
+                      return (
+                        <div
+                          className={`inbox-item notification-inbox-item inbox-card-row ${isUnread ? "unread" : "read"}`}
+                          key={item.id}
+                          onClick={() => void readNotification(item.id)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={e => e.key === "Enter" && void readNotification(item.id)}
+                        >
+                          <div className={`inbox-icon-box ${item.type === "RISK" || item.type === "DEADLINE" ? "amber" : "mint"}`}>
+                            {item.type === "RISK" ? <Zap size={16} /> : item.type === "DEADLINE" ? <Clock size={16} /> : <Bell size={16} />}
+                          </div>
+
+                          <div className="inbox-card-content">
+                            <div className="inbox-card-header">
+                              <b className="inbox-card-title">{item.title}</b>
+                              <div className="inbox-card-meta">
+                                {isUnread && <span className="inbox-unread-pip" title="Unread notification" />}
+                                <span className={`inbox-state-tag notification-state ${isUnread ? "unread" : "read"}`}>
+                                  {isUnread ? "Unread" : "Read"}
+                                </span>
+                                <span className="inbox-timestamp">
+                                  {new Date(item.createdAt).toLocaleString([], {
+                                    month: "short",
+                                    day: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </span>
+                              </div>
+                            </div>
+
+                            <p className="inbox-card-body">{bodyText}</p>
+
+                            {relatedEntity && (
+                              <div className="inbox-entity-tag">
+                                <Folder size={11} />
+                                <span>{relatedEntity}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 ) : (
                   <div className="inbox-empty">
-                    <div><CheckCheck size={20} /></div>
+                    <div className="inbox-empty-icon"><CheckCheck size={22} /></div>
                     <h3>You’re all caught up</h3>
                     <p>New assignments, comments, mentions, and risks will appear here.</p>
                   </div>
@@ -2249,21 +2430,31 @@ export default function Home() {
               </section>
 
               {blockedCount + overdueCount > 0 && (
-                <section className="panel inbox-panel" style={{ marginTop: "16px" }}>
+                <section className="panel attention-panel" style={{ marginTop: "20px" }}>
                   <div className="panel-head">
                     <div>
+                      <div className="eyebrow"><AlertTriangle size={11} /> CRITICAL PATH SIGNALS</div>
                       <h2>Project attention</h2>
-                      <span className="muted-copy">Current signals in {project?.name || "your active project"}</span>
                     </div>
+                    <span className="muted-copy">{project?.name || "Active workspace project"}</span>
                   </div>
-                  <div className="inbox-item">
-                    <span className="notice-icon amber"><Zap size={15} /></span>
-                    <span>
-                      <b>{blockedCount} blocked and {overdueCount} overdue tasks</b>
-                      <small>Review downstream impact before changing dates.</small>
-                    </span>
-                    <button className="button button-secondary small-button" onClick={() => setPage("AI command")}>
-                      Review risk <ArrowRight size={13} />
+                  <div className="attention-card-body">
+                    <div className="attention-severity-badge">
+                      <AlertTriangle size={14} />
+                      <span>HIGH ATTENTION</span>
+                    </div>
+                    <div className="attention-details">
+                      <b className="attention-headline">
+                        {blockedCount + overdueCount}{" "}
+                        {blockedCount + overdueCount === 1 ? "task requiring" : "tasks requiring"} immediate review
+                      </b>
+                      <p className="attention-text">
+                        {blockedCount} blocked and {overdueCount} overdue tasks are affecting downstream project momentum.
+                        Review blocker chains to adjust dates or reassign dependencies.
+                      </p>
+                    </div>
+                    <button className="button button-primary attention-action-btn" onClick={() => setPage("AI command")}>
+                      Review risk <ArrowRight size={14} />
                     </button>
                   </div>
                 </section>
@@ -2910,45 +3101,52 @@ export default function Home() {
             {modal === "plan" && proposal && (
               <div className="proposal-review">
                 <div className="proposal-project">
-                  <span className="project-symbol symbol-0"><Blocks size={16} /></span>
-                  <span>
-                    <b>{proposal.proposed.projectName}</b>
-                    <small>{proposal.proposed.projectDescription}</small>
-                  </span>
+                  <span className="project-symbol symbol-0"><Blocks size={18} /></span>
+                  <div className="proposal-project-details">
+                    <b className="proposal-proj-title">{proposal.proposed.projectName}</b>
+                    <small className="proposal-proj-desc">{proposal.proposed.projectDescription}</small>
+                  </div>
                 </div>
                 <div className="review-summary">
-                  <span><b>{proposal.proposed.tasks.length}</b> proposed tasks</span>
-                  <span><b>{proposal.proposed.milestones.length}</b> milestones</span>
-                  <span className="review-provider">
+                  <span className="review-stat-pill"><b>{proposal.proposed.tasks.length}</b> proposed tasks</span>
+                  <span className="review-stat-pill"><b>{proposal.proposed.milestones.length}</b> milestones</span>
+                  <span className="review-provider-badge">
                     {proposal.provider === "local_rules" ? "Local draft" : "AI generated"}
                   </span>
                 </div>
                 {proposal.proposed.assumptions?.length > 0 && (
                   <div className="assumption-note">
-                    <CircleHelp size={14} />
-                    <span>
+                    <div className="assumption-icon"><CircleHelp size={16} /></div>
+                    <div className="assumption-text">
                       <b>Assumptions to review</b>
-                      <small>{proposal.proposed.assumptions.join(" ")}</small>
-                    </span>
+                      <p>{proposal.proposed.assumptions.join(" ")}</p>
+                    </div>
                   </div>
                 )}
                 <div className="review-task-list">
                   {proposal.proposed.tasks.map((t, i) => (
-                    <div className="review-task" key={i}>
-                      <span className="review-index">{String(i + 1).padStart(2, "0")}</span>
-                      <span>
-                        <b>{t.title}</b>
-                        <small>
-                          {t.description ||
-                            (t.blockedBy?.length
-                              ? `Depends on task ${t.blockedBy.map(x => x + 1).join(", ")}`
-                              : "No description supplied")}
-                        </small>
-                      </span>
-                      <span className={`priority-label ${t.priority?.toLowerCase()}`}>
-                        {t.priority || "MEDIUM"}
-                      </span>
-                      <span className="review-due">{t.dueDate ? dueLabel(t.dueDate) : "No date"}</span>
+                    <div className="review-task review-task-card" key={i}>
+                      <div className="review-task-head">
+                        <span className="review-index">#{String(i + 1).padStart(2, "0")}</span>
+                        <b className="review-task-title">{t.title}</b>
+                        <span className={`priority-label priority-pill ${(t.priority || "MEDIUM").toLowerCase()}`}>
+                          {t.priority || "MEDIUM"}
+                        </span>
+                      </div>
+                      {t.description && <p className="review-task-desc">{t.description}</p>}
+                      <div className="review-task-meta-bar">
+                        <span className="review-meta-item">
+                          <User size={12} /> {(t.assigneeId ? members.find(m => m.user.id === t.assigneeId)?.user.name : null) || "Proposed: Unassigned"}
+                        </span>
+                        <span className="review-meta-item">
+                          <Calendar size={12} /> {t.dueDate ? dueLabel(t.dueDate) : "No date set"}
+                        </span>
+                        {t.blockedBy?.length ? (
+                          <span className="review-meta-item dep-chip">
+                            <GitBranch size={12} /> Depends on #{t.blockedBy.map(x => x + 1).join(", #")}
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                   ))}
                 </div>

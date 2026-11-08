@@ -35,6 +35,212 @@ interface Props {
   initialProjectId?: string | null;
 }
 
+function HealthTrendHistoryChart({ history }: { history: any[] }) {
+  if (!history || history.length === 0) {
+    return (
+      <div className="health-history-empty">
+        <Activity size={24} style={{ color: "var(--muted)", margin: "0 auto 8px", display: "block" }} />
+        <b style={{ display: "block", marginBottom: "4px" }}>No historical snapshots yet</b>
+        <p className="muted-copy">Recalculate project health periodically to track health score velocity over time.</p>
+      </div>
+    );
+  }
+
+  if (history.length === 1) {
+    const single = history[0];
+    const score = single.score;
+    const scoreColor = (score ?? 0) >= 70 ? "#48C9B0" : (score ?? 0) >= 40 ? "#D5A65A" : "#E66D70";
+
+    return (
+      <div className="health-history-single">
+        <div className="single-snapshot-badge" style={{ borderColor: scoreColor }}>
+          <span className="single-score" style={{ color: scoreColor }}>{score !== null ? score : "—"}</span>
+          <span className="single-max">/ 100</span>
+        </div>
+        <div className="single-snapshot-info">
+          <b>Initial Baseline Snapshot Recorded</b>
+          <p>
+            Captured on {new Date(single.createdAt).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
+            {" · "}Classification: <strong>{single.classification.replace("_", " ")}</strong>
+          </p>
+          <small className="muted-copy">
+            A minimum of 2 snapshots are required to plot trend trajectories. Additional snapshots will render as a continuous timeline automatically.
+          </small>
+        </div>
+      </div>
+    );
+  }
+
+  const sorted = [...history].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+  const svgWidth = 660;
+  const svgHeight = 210;
+  const paddingLeft = 45;
+  const paddingRight = 30;
+  const paddingTop = 25;
+  const paddingBottom = 35;
+  const plotWidth = svgWidth - paddingLeft - paddingRight;
+  const plotHeight = svgHeight - paddingTop - paddingBottom;
+
+  const getY = (score: number | null) => {
+    const s = Math.max(0, Math.min(100, score ?? 0));
+    return paddingTop + plotHeight - (s / 100) * plotHeight;
+  };
+
+  const getX = (index: number) => {
+    return paddingLeft + (index / (sorted.length - 1)) * plotWidth;
+  };
+
+  const points = sorted.map((h, i) => ({
+    x: getX(i),
+    y: getY(h.score),
+    score: h.score,
+    classification: h.classification,
+    date: new Date(h.createdAt).toLocaleDateString([], { month: "short", day: "numeric" }),
+    fullDate: new Date(h.createdAt).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }),
+    color: (h.score ?? 0) >= 70 ? "#48C9B0" : (h.score ?? 0) >= 40 ? "#D5A65A" : "#E66D70",
+  }));
+
+  const pathD = points.reduce((acc, p, i) => {
+    return `${acc} ${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
+  }, "");
+
+  const areaD = `${pathD} L ${points[points.length - 1].x.toFixed(1)} ${(paddingTop + plotHeight).toFixed(1)} L ${points[0].x.toFixed(1)} ${(paddingTop + plotHeight).toFixed(1)} Z`;
+
+  return (
+    <div className="health-chart-wrapper">
+      <div className="health-chart-legend">
+        <span className="legend-item"><span className="legend-dot healthy" /> Healthy (≥ 70)</span>
+        <span className="legend-item"><span className="legend-dot at-risk" /> At Risk (40–69)</span>
+        <span className="legend-item"><span className="legend-dot critical" /> Critical (&lt; 40)</span>
+      </div>
+
+      <div className="health-chart-svg-container">
+        <svg
+          viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+          className="health-trend-svg"
+          preserveAspectRatio="xMidYMid meet"
+          aria-label="Historical health score trend"
+        >
+          <defs>
+            <linearGradient id="healthTrendGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#48C9B0" stopOpacity="0.25" />
+              <stop offset="100%" stopColor="#48C9B0" stopOpacity="0.0" />
+            </linearGradient>
+          </defs>
+
+          {/* Range threshold background bands */}
+          {/* Healthy zone: 70 - 100 */}
+          <rect
+            x={paddingLeft}
+            y={getY(100)}
+            width={plotWidth}
+            height={getY(70) - getY(100)}
+            fill="#48C9B0"
+            fillOpacity="0.05"
+          />
+          {/* At Risk zone: 40 - 70 */}
+          <rect
+            x={paddingLeft}
+            y={getY(70)}
+            width={plotWidth}
+            height={getY(40) - getY(70)}
+            fill="#D5A65A"
+            fillOpacity="0.05"
+          />
+          {/* Critical zone: 0 - 40 */}
+          <rect
+            x={paddingLeft}
+            y={getY(40)}
+            width={plotWidth}
+            height={getY(0) - getY(40)}
+            fill="#E66D70"
+            fillOpacity="0.05"
+          />
+
+          {/* Grid lines and Y-axis scale markings */}
+          {[100, 70, 40, 0].map(val => {
+            const y = getY(val);
+            return (
+              <g key={val} className="chart-grid-line">
+                <line
+                  x1={paddingLeft}
+                  y1={y}
+                  x2={svgWidth - paddingRight}
+                  y2={y}
+                  stroke="var(--line)"
+                  strokeDasharray={val === 70 || val === 40 ? "4 4" : "none"}
+                  strokeOpacity="0.7"
+                />
+                <text
+                  x={paddingLeft - 8}
+                  y={y + 4}
+                  textAnchor="end"
+                  fontSize="10"
+                  fill="var(--muted)"
+                  fontFamily="inherit"
+                >
+                  {val}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Area fill */}
+          <path d={areaD} fill="url(#healthTrendGrad)" />
+
+          {/* Trend line */}
+          <path
+            d={pathD}
+            fill="none"
+            stroke="var(--primary)"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+
+          {/* Data Points */}
+          {points.map((p, idx) => (
+            <g key={idx} className="chart-point-group">
+              <title>{`${p.fullDate}: Score ${p.score ?? "—"} (${p.classification.replace("_", " ")})`}</title>
+              
+              {/* Outer halo */}
+              <circle cx={p.x} cy={p.y} r="5.5" fill="var(--panel)" stroke={p.color} strokeWidth="2.5" />
+              {/* Center pip */}
+              <circle cx={p.x} cy={p.y} r="2" fill={p.color} />
+
+              {/* Score text directly above the point */}
+              <text
+                x={p.x}
+                y={p.y - 10}
+                textAnchor="middle"
+                fontSize="11"
+                fontWeight="700"
+                fill={p.color}
+                fontFamily="inherit"
+              >
+                {p.score ?? "—"}
+              </text>
+
+              {/* Date label directly below on X-axis */}
+              <text
+                x={p.x}
+                y={paddingTop + plotHeight + 18}
+                textAnchor="middle"
+                fontSize="10"
+                fill="var(--muted)"
+                fontFamily="inherit"
+              >
+                {p.date}
+              </text>
+            </g>
+          ))}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
 export default function ProjectHealthDashboard({
   projects,
   user,
@@ -233,7 +439,7 @@ export default function ProjectHealthDashboard({
           </p>
         </div>
 
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+        <div className="health-top-actions">
           {selectedProjectId && (
             <>
               <button
@@ -730,36 +936,17 @@ export default function ProjectHealthDashboard({
           )}
 
           {/* Historical Health Trend History */}
-          {history.length > 0 && (
-            <div className="panel history-panel">
-              <div className="panel-head">
-                <div>
-                  <div className="eyebrow">TRENDS OVER TIME</div>
-                  <h2>Historical Health Snapshots</h2>
-                </div>
-                <small className="muted-copy">{history.length} snapshot(s) retained</small>
+          <div className="panel history-panel">
+            <div className="panel-head">
+              <div>
+                <div className="eyebrow">TRENDS OVER TIME</div>
+                <h2>Historical Health Snapshots</h2>
               </div>
-
-              <div className="history-sparkline-row">
-                {history.map((h, i) => (
-                  <div
-                    key={h.id || i}
-                    className="history-point-col"
-                    title={`${new Date(h.createdAt).toLocaleDateString()}: Score ${h.score ?? "—"} (${h.classification})`}
-                  >
-                    <div
-                      className="history-bar"
-                      style={{
-                        height: `${Math.max(12, (h.score ?? 10) * 0.8)}px`,
-                        backgroundColor: getScoreColor(h.score, h.classification),
-                      }}
-                    />
-                    <small>{new Date(h.createdAt).getDate()}</small>
-                  </div>
-                ))}
-              </div>
+              <small className="muted-copy">{history.length} snapshot(s) retained</small>
             </div>
-          )}
+
+            <HealthTrendHistoryChart history={history} />
+          </div>
 
           {/* Detected Risks & Recommendations Dashboard */}
           <div className="panel risks-panel">

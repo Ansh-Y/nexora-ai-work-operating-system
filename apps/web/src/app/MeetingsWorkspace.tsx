@@ -110,7 +110,132 @@ export default function MeetingsWorkspace({ projects, members, onOpenProject, no
   return <div className="meetings-workspace">
     <div className="welcome-row compact-welcome"><div><div className="eyebrow"><CalendarDays size={12}/> MEETING INTELLIGENCE</div><h1>Meetings <span className="count-pill">{meetings.length}</span></h1><p className="page-subtitle">Record, transcribe, and turn reviewed decisions into trackable work.</p></div><button className="button button-primary" onClick={() => { setCreating(v => !v); setError(""); }}><Plus size={16}/> New meeting</button></div>
     {error && <div className="meeting-error"><CircleAlert size={15}/><span>{error}</span><button onClick={() => setError("")} aria-label="Dismiss error"><X size={14}/></button></div>}
-    {(creating || editing) && <form className="panel meeting-create" onSubmit={createMeeting}><div className="panel-head"><div><div className="eyebrow">MEETING DETAILS</div><h2>{editing ? "Edit meeting" : "Schedule or log a meeting"}</h2></div><button type="button" className="icon-button" aria-label="Close" onClick={() => { setCreating(false); setEditing(false); }}><X size={16}/></button></div><label>Title<input autoFocus required minLength={2} maxLength={180} value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="e.g. Product planning review"/></label><label>Description<textarea rows={2} maxLength={5000} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Agenda, context, or outcomes to capture"/></label><div className="meeting-form-grid"><label>Date and time<input type="datetime-local" value={form.startsAt} onChange={e => setForm({ ...form, startsAt: e.target.value })}/></label><label>Duration (minutes)<input type="number" min={5} max={1440} value={form.durationMinutes} onChange={e => setForm({ ...form, durationMinutes: e.target.value })}/></label><label>Project<select value={form.projectId} onChange={e => setForm({ ...form, projectId: e.target.value })}><option value="">Workspace meeting</option>{projects.map(p => <option value={p.id} key={p.id}>{p.name}</option>)}</select></label></div><label>Participants <select multiple value={form.participantIds} onChange={e => setForm({ ...form, participantIds: Array.from(e.currentTarget.selectedOptions, option => option.value) })}>{members.map(m => <option value={m.user.id} key={m.user.id}>{m.user.name} · {m.role.toLowerCase().replaceAll("_", " ")}</option>)}</select><small className="meeting-participant-hint">Hold Ctrl or Command to select more than one person.</small></label><div className="meeting-form-actions"><button type="button" className="button button-secondary" onClick={() => { setCreating(false); setEditing(false); }}>Cancel</button><button className="button button-primary" disabled={busy || !canCreate}>{busy ? <LoaderCircle size={14} className="spin"/> : <Check size={14}/>} {editing ? "Save changes" : "Create meeting"}</button></div></form>}
+    {(creating || editing) && (
+      <form className="panel meeting-create" onSubmit={createMeeting}>
+        <div className="panel-head">
+          <div>
+            <div className="eyebrow">MEETING DETAILS</div>
+            <h2>{editing ? "Edit meeting" : "Schedule or log a meeting"}</h2>
+          </div>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="Close"
+            onClick={() => {
+              setCreating(false);
+              setEditing(false);
+            }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="meeting-form-layout">
+          <div className="meeting-form-field col-span-2">
+            <label htmlFor="meeting-title">Title</label>
+            <input
+              id="meeting-title"
+              autoFocus
+              required
+              minLength={2}
+              maxLength={180}
+              value={form.title}
+              onChange={e => setForm({ ...form, title: e.target.value })}
+              placeholder="e.g. Product planning review"
+            />
+          </div>
+
+          <div className="meeting-form-field col-span-2">
+            <label htmlFor="meeting-description">Description</label>
+            <textarea
+              id="meeting-description"
+              rows={3}
+              maxLength={5000}
+              value={form.description}
+              onChange={e => setForm({ ...form, description: e.target.value })}
+              placeholder="Agenda, context, or outcomes to capture"
+            />
+          </div>
+
+          <div className="meeting-form-field">
+            <label htmlFor="meeting-starts-at">Date and time</label>
+            <input
+              id="meeting-starts-at"
+              type="datetime-local"
+              value={form.startsAt}
+              onChange={e => setForm({ ...form, startsAt: e.target.value })}
+            />
+          </div>
+
+          <div className="meeting-form-field">
+            <label htmlFor="meeting-duration">Duration (minutes)</label>
+            <input
+              id="meeting-duration"
+              type="number"
+              min={5}
+              max={1440}
+              value={form.durationMinutes}
+              onChange={e => setForm({ ...form, durationMinutes: e.target.value })}
+            />
+          </div>
+
+          <div className="meeting-form-field">
+            <label htmlFor="meeting-project">Project</label>
+            <select
+              id="meeting-project"
+              value={form.projectId}
+              onChange={e => setForm({ ...form, projectId: e.target.value })}
+            >
+              <option value="">Workspace meeting</option>
+              {projects.map(p => (
+                <option value={p.id} key={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="meeting-form-field">
+            <label htmlFor="meeting-participants">Participants</label>
+            <select
+              id="meeting-participants"
+              multiple
+              value={form.participantIds}
+              onChange={e =>
+                setForm({
+                  ...form,
+                  participantIds: Array.from(e.currentTarget.selectedOptions, option => option.value),
+                })
+              }
+            >
+              {members.map(m => (
+                <option value={m.user.id} key={m.user.id}>
+                  {m.user.name} · {m.role.toLowerCase().replaceAll("_", " ")}
+                </option>
+              ))}
+            </select>
+            <small className="meeting-participant-hint">Hold Ctrl or Command to select more than one person.</small>
+          </div>
+        </div>
+
+        <div className="meeting-form-actions">
+          <button
+            type="button"
+            className="button button-secondary"
+            onClick={() => {
+              setCreating(false);
+              setEditing(false);
+            }}
+          >
+            Cancel
+          </button>
+          <button className="button button-primary" disabled={busy || !canCreate}>
+            {busy ? <LoaderCircle size={14} className="spin" /> : <Check size={14} />}
+            {editing ? "Save changes" : "Create meeting"}
+          </button>
+        </div>
+      </form>
+    )}
     <div className="meeting-layout">
       <section className="panel meeting-list-panel">
         <div className="meeting-list-tools">
