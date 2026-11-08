@@ -21,10 +21,12 @@ import {
   FileText,
   Filter,
   GitBranch,
+  HardDrive,
   LayoutDashboard,
   List,
   LoaderCircle,
   LogOut,
+  Mail,
   Menu,
   MessageSquare,
   Moon,
@@ -33,6 +35,7 @@ import {
   Search,
   Send,
   Settings2,
+  Shield,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
@@ -175,6 +178,15 @@ export default function Home() {
   const [dependencySource, setDependencySource] = useState("");
   const [commentTask, setCommentTask] = useState<Task | null>(null);
   const [comments, setComments] = useState<any[]>([]);
+  const [settingsTab, setSettingsTab] = useState<string>("members");
+
+  const scrollToSettingsSection = (id: string, tabName: string) => {
+    setSettingsTab(tabName);
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth" });
+    }
+  };
   const [commentBody, setCommentBody] = useState("");
   const [taskActivity, setTaskActivity] = useState<any>(null);
   const [taskModalTab, setTaskModalTab] = useState<"comments" | "github">("comments");
@@ -244,7 +256,8 @@ export default function Home() {
       setAuthMode("register");
     }
     const theme = window.localStorage.getItem("nexora-theme");
-    if (theme === "dark") setDark(true);
+    if (theme === "light") setDark(false);
+    else if (theme === "dark") setDark(true);
     if (existing) {
       setToken(existing);
       api.setToken(existing);
@@ -790,12 +803,19 @@ export default function Home() {
         </div>
 
         <section className="auth-panel">
-          <div className="auth-mobile-brand">
-            <div className="brand-mark"><Blocks size={18} /></div> nexora
-          </div>
-          <div className="auth-box">
-            <div className="eyebrow">GET STARTED</div>
-            <h2>{inviteToken ? "Join your team" : authMode === "login" ? "Welcome back" : "Start your workspace"}</h2>
+          <div className="auth-container">
+            {/* 1. NEXORA logo */}
+            <div className="auth-brand-header">
+              <div className="brand-mark"><Blocks size={20} /></div>
+              <span className="brand-name">nexora</span>
+            </div>
+
+            {/* 2. Welcome back heading */}
+            <h2 className="auth-heading">
+              {inviteToken ? "Join your team" : authMode === "login" ? "Welcome back" : "Start your workspace"}
+            </h2>
+
+            {/* 3. Short supporting description */}
             <p className="auth-sub">
               {inviteToken
                 ? "Create an account with the invited email, or sign in to accept the invitation."
@@ -803,11 +823,13 @@ export default function Home() {
                 ? "Sign in to pick up where your team left off."
                 : "Set up your account and bring the work together."}
             </p>
-            <form onSubmit={submitAuth} className="stack-form">
+
+            {/* 4-8. Authentication form */}
+            <form onSubmit={submitAuth} className="auth-form-flow">
               {authMode === "register" && (
                 <>
-                  <label>
-                    Your name
+                  <label className="auth-field-label">
+                    <span>Your name</span>
                     <input
                       required
                       minLength={2}
@@ -816,8 +838,8 @@ export default function Home() {
                       placeholder="Alex Morgan"
                     />
                   </label>
-                  <label>
-                    Workspace name <span className="field-hint">Optional when joining an invitation</span>
+                  <label className="auth-field-label">
+                    <span>Workspace name <small className="field-hint-text">(Optional for invitations)</small></span>
                     <input
                       minLength={2}
                       value={form.organizationName}
@@ -827,8 +849,8 @@ export default function Home() {
                   </label>
                 </>
               )}
-              <label>
-                Email address
+              <label className="auth-field-label">
+                <span>Email address</span>
                 <input
                   type="email"
                   required
@@ -837,8 +859,8 @@ export default function Home() {
                   placeholder="you@company.com"
                 />
               </label>
-              <label>
-                Password
+              <label className="auth-field-label">
+                <span>Password</span>
                 <input
                   type="password"
                   required
@@ -847,26 +869,32 @@ export default function Home() {
                   onChange={e => setForm({ ...form, password: e.target.value })}
                   placeholder={authMode === "register" ? "At least 10 characters" : "Your password"}
                 />
-                {authMode === "login" && (
-                  <span className="field-hint">Demo workspace: demo@nexora.local / NexoraDemo!2026</span>
-                )}
               </label>
+
               {error && <div className="form-error">{error}</div>}
-              <button className="button button-primary button-wide" disabled={busy}>
+
+              {/* 8. Sign-in button */}
+              <button type="submit" className="button button-primary button-wide auth-submit-btn" disabled={busy}>
                 {busy ? <LoaderCircle className="spin" size={16} /> : null}
-                {inviteToken
-                  ? authMode === "login"
-                    ? "Sign in to join"
-                    : "Create account and join"
-                  : authMode === "login"
-                  ? "Sign in to Nexora"
-                  : "Create your workspace"}
+                <span>
+                  {inviteToken
+                    ? authMode === "login"
+                      ? "Sign in to join"
+                      : "Create account and join"
+                    : authMode === "login"
+                    ? "Sign in to Nexora"
+                    : "Create your workspace"}
+                </span>
                 <ArrowRight size={16} />
               </button>
             </form>
-            <div className="auth-switch">
-              {authMode === "login" ? "New to Nexora?" : "Already have an account?"}
+
+            {/* 9. Create account link */}
+            <div className="auth-switch-row">
+              <span>{authMode === "login" ? "New to Nexora?" : "Already have an account?"}</span>
               <button
+                type="button"
+                className="auth-switch-link"
                 onClick={() => {
                   setError("");
                   setAuthMode(authMode === "login" ? "register" : "login");
@@ -875,11 +903,37 @@ export default function Home() {
                 {authMode === "login" ? "Create an account" : "Sign in"}
               </button>
             </div>
-            <div className="secure-note">
-              <ShieldCheck size={14} /> Your workspace data is private and tenant-isolated.
+
+            {/* 10. Optional demo credential information in a separate, visually distinct section */}
+            {authMode === "login" && (
+              <div className="demo-credentials-card">
+                <div className="demo-card-head">
+                  <span className="demo-badge">DEMO WORKSPACE</span>
+                  <span className="demo-hint">One-click testing credentials</span>
+                </div>
+                <div className="demo-card-body">
+                  <div className="demo-cred-row">
+                    <span className="demo-label">Email:</span>
+                    <code className="demo-code">demo@nexora.local</code>
+                  </div>
+                  <div className="demo-cred-row">
+                    <span className="demo-label">Password:</span>
+                    <code className="demo-code">NexoraDemo!2026</code>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 11. Privacy/security message */}
+            <div className="auth-security-notice">
+              <ShieldCheck size={14} />
+              <span>Your workspace data is private and tenant-isolated.</span>
+            </div>
+
+            <div className="auth-footer-credits">
+              &copy; 2026 Nexora Systems &middot; Privacy &middot; Terms
             </div>
           </div>
-          <div className="auth-footer">&copy; 2026 Nexora Systems <span>&middot;</span> Privacy <span>&middot;</span> Terms</div>
         </section>
       </main>
     );
@@ -925,50 +979,52 @@ export default function Home() {
         </div>
 
         {/* Workspace Switcher */}
-        {!sidebarCollapsed && (
-          <button className="workspace-switcher" onClick={() => setProjectMenu(!projectMenu)}>
-            <div className="workspace-avatar">{initials(workspace?.name)}</div>
-            <span className="workspace-name">
-              <b>{workspace?.name || "My workspace"}</b>
-              <small>{workspace?.role?.toLowerCase().replaceAll("_", " ")}</small>
-            </span>
-            <ChevronDown size={15} />
-          </button>
-        )}
-        {sidebarCollapsed && (
-          <button
-            className="workspace-switcher"
-            style={{ justifyContent: "center", padding: "6px" }}
-            onClick={() => setProjectMenu(!projectMenu)}
-            title={workspace?.name || "Workspace"}
-          >
-            <div className="workspace-avatar">{initials(workspace?.name)}</div>
-          </button>
-        )}
-
-        {projectMenu && (
-          <div className="workspace-menu">
-            {workspaces.map(w => (
-              <button key={w.id} onClick={() => chooseWorkspace(w)}>
-                <span className="workspace-avatar small">{initials(w.name)}</span>
-                <span>
-                  {w.name}
-                  <small>{w.role.toLowerCase().replaceAll("_", " ")}</small>
-                </span>
-                {workspace?.id === w.id && <Check size={15} />}
-              </button>
-            ))}
-            <button
-              className="workspace-add"
-              onClick={() => {
-                setProjectMenu(false);
-                setPage("Settings");
-              }}
-            >
-              <Plus size={14} /> Manage workspace
+        <div className="workspace-switcher-wrap">
+          {!sidebarCollapsed && (
+            <button className="workspace-switcher" onClick={() => setProjectMenu(!projectMenu)}>
+              <div className="workspace-avatar">{initials(workspace?.name)}</div>
+              <span className="workspace-name">
+                <b>{workspace?.name || "My workspace"}</b>
+                <small>{workspace?.role?.toLowerCase().replaceAll("_", " ")}</small>
+              </span>
+              <ChevronDown size={15} />
             </button>
-          </div>
-        )}
+          )}
+          {sidebarCollapsed && (
+            <button
+              className="workspace-switcher"
+              style={{ justifyContent: "center", padding: "6px" }}
+              onClick={() => setProjectMenu(!projectMenu)}
+              title={workspace?.name || "Workspace"}
+            >
+              <div className="workspace-avatar">{initials(workspace?.name)}</div>
+            </button>
+          )}
+
+          {projectMenu && (
+            <div className="workspace-menu">
+              {workspaces.map(w => (
+                <button key={w.id} onClick={() => chooseWorkspace(w)}>
+                  <span className="workspace-avatar small">{initials(w.name)}</span>
+                  <span>
+                    {w.name}
+                    <small>{w.role.toLowerCase().replaceAll("_", " ")}</small>
+                  </span>
+                  {workspace?.id === w.id && <Check size={15} />}
+                </button>
+              ))}
+              <button
+                className="workspace-add"
+                onClick={() => {
+                  setProjectMenu(false);
+                  setPage("Settings");
+                }}
+              >
+                <Plus size={14} /> Manage workspace
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Search & Command Palette launcher */}
         {!sidebarCollapsed ? (
@@ -1280,7 +1336,7 @@ export default function Home() {
                     <span className="pulse-dot" />{" "}
                     {new Date().toLocaleDateString("en", { weekday: "long", month: "long", day: "numeric" }).toUpperCase()}
                   </div>
-                  <h1>Good morning, {user.name.split(" ")[0]}<span className="wave">✳</span></h1>
+                  <h1>Good morning, {user.name.split(" ")[0]}</h1>
                   <p className="page-subtitle">A clear, unified view of team velocity and project health.</p>
                 </div>
                 <div className="welcome-actions">
@@ -2245,7 +2301,7 @@ export default function Home() {
 
           {/* 10. SETTINGS & INTEGRATIONS */}
           {page === "Settings" && (
-            <>
+            <div className="settings-container">
               <div className="welcome-row compact-welcome">
                 <div>
                   <div className="eyebrow">WORKSPACE PREFERENCES</div>
@@ -2254,161 +2310,318 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="settings-layout">
-                <div className="settings-nav">
-                  <button className="selected">
-                    <Users size={15} /> Members
-                  </button>
-                  <button onClick={() => notify("Integration connections can be enabled below.")}>
-                    <GitBranch size={15} /> Integrations
-                  </button>
-                  <button onClick={toggleTheme}>
-                    <Zap size={15} /> Appearance <span>{dark ? "Dark" : "Light"}</span>
-                  </button>
-                  <button onClick={() => notify("Security settings are managed by workspace owners.")}>
-                    <ShieldCheck size={15} /> Security
-                  </button>
-                </div>
+              {/* Settings Navigation Tabs */}
+              <div className="settings-tab-bar" role="tablist">
+                <button
+                  type="button"
+                  className={`settings-tab-btn ${settingsTab === "members" ? "active" : ""}`}
+                  onClick={() => scrollToSettingsSection("settings-members", "members")}
+                >
+                  <Users size={15} />
+                  <span>Members</span>
+                  <span className="settings-tab-count">{members.length}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`settings-tab-btn ${settingsTab === "integrations" ? "active" : ""}`}
+                  onClick={() => scrollToSettingsSection("settings-integrations", "integrations")}
+                >
+                  <GitBranch size={15} />
+                  <span>Integrations</span>
+                </button>
+                <button
+                  type="button"
+                  className={`settings-tab-btn ${settingsTab === "appearance" ? "active" : ""}`}
+                  onClick={() => scrollToSettingsSection("settings-appearance", "appearance")}
+                >
+                  <Zap size={15} />
+                  <span>Appearance</span>
+                </button>
+                <button
+                  type="button"
+                  className={`settings-tab-btn ${settingsTab === "storage" ? "active" : ""}`}
+                  onClick={() => scrollToSettingsSection("storage-management-panel", "storage")}
+                >
+                  <HardDrive size={15} />
+                  <span>Storage &amp; Retention</span>
+                </button>
+              </div>
 
-                <div className="settings-content">
-                  {/* Team Members */}
-                  <section className="panel settings-panel">
-                    <div className="panel-head">
-                      <div>
-                        <div className="eyebrow">YOUR TEAM</div>
-                        <h2>Workspace members</h2>
-                      </div>
-                      <button
-                        className="button button-primary small-button"
-                        onClick={() => {
-                          setInviteLink("");
-                          setModal("invite");
-                        }}
-                      >
-                        <Plus size={14} /> Invite member
-                      </button>
+              <div className="settings-stack">
+                {/* Team Members Section */}
+                <section id="settings-members" className="panel settings-card-panel">
+                  <div className="panel-head">
+                    <div>
+                      <div className="eyebrow">YOUR TEAM</div>
+                      <h2>Workspace members</h2>
+                      <p className="section-desc">Manage people who have access to this workspace and their roles.</p>
                     </div>
+                    <button
+                      className="button button-primary small-button"
+                      onClick={() => {
+                        setInviteLink("");
+                        setModal("invite");
+                      }}
+                    >
+                      <Plus size={14} /> Invite member
+                    </button>
+                  </div>
 
-                    <div className="member-list">
-                      {members.map((m, i) => (
-                        <div className="member-row" key={m.id}>
-                          <div className="person-avatar" style={{ background: avatarColors[i % avatarColors.length] }}>
+                  <div className="member-list">
+                    {members.map((m, i) => (
+                      <div className="member-row" key={m.id}>
+                        <div className="member-identity">
+                          <div
+                            className="person-avatar"
+                            style={{ background: avatarColors[i % avatarColors.length] }}
+                          >
                             {initials(m.user.name)}
                           </div>
-                          <span>
-                            <b>{m.user.name}</b>
-                            <small>{m.user.email}</small>
-                          </span>
-                          <span className="role-chip">{m.role.toLowerCase().replaceAll("_", " ")}</span>
+                          <div className="member-details">
+                            <b className="member-name">{m.user.name}</b>
+                            <span className="member-email">{m.user.email}</span>
+                          </div>
                         </div>
-                      ))}
-                      {!members.length && <div className="empty-inline">Members will appear after the workspace loads.</div>}
-                    </div>
-
-                    <div className="settings-hint">
-                      <ShieldCheck size={15} />
-                      <span>
-                        Roles are checked on the server for every write. Invitations are created securely; email delivery
-                        needs SMTP configuration.
-                      </span>
-                    </div>
-                  </section>
-
-                  {/* Connected Tools & Status */}
-                  <section className="panel settings-panel">
-                    <div className="panel-head">
-                      <div>
-                        <div className="eyebrow">CONNECTED TOOLS</div>
-                        <h2>Integrations</h2>
+                        <div className="member-meta">
+                          <span className={`role-chip role-${m.role.toLowerCase()}`}>
+                            <Shield size={12} />
+                            {m.role.toLowerCase().replaceAll("_", " ")}
+                          </span>
+                        </div>
+                        <div className="member-actions">
+                          {m.user.id === user.id ? (
+                            <span className="member-badge you">You</span>
+                          ) : (
+                            <span className="member-badge active">Active</span>
+                          )}
+                        </div>
                       </div>
-                      <span className="status-tag planning">SETUP</span>
+                    ))}
+                    {!members.length && (
+                      <div className="empty-inline">Members will appear after the workspace loads.</div>
+                    )}
+                  </div>
+
+                  <div className="settings-hint">
+                    <ShieldCheck size={15} />
+                    <span>
+                      Roles are checked on the server for every write. Invitations are created securely; email delivery
+                      needs SMTP configuration.
+                    </span>
+                  </div>
+                </section>
+
+                {/* Connected Tools & Integrations Section */}
+                <section id="settings-integrations" className="panel settings-card-panel">
+                  <div className="panel-head">
+                    <div>
+                      <div className="eyebrow">CONNECTED TOOLS</div>
+                      <h2>Integrations</h2>
+                      <p className="section-desc">Connect developer tools and productivity services to your workspace.</p>
+                    </div>
+                    <span className="status-tag active">ACTIVE ECOSYSTEM</span>
+                  </div>
+
+                  <div className="integrations-list">
+                    {/* GitHub */}
+                    <div className="integration-card-row">
+                      <div className="integration-left">
+                        <div className="integration-icon-wrap github-bg">
+                          <GitBranch size={18} />
+                        </div>
+                        <div className="integration-info">
+                          <div className="integration-title-line">
+                            <b className="integration-name">GitHub</b>
+                            <span className="integration-status-pill">Available</span>
+                          </div>
+                          <p className="integration-desc">Repository activity, pull request sync, and automated task transitions.</p>
+                        </div>
+                      </div>
+                      <div className="integration-right">
+                        <button
+                          className="button button-secondary small-button"
+                          onClick={() => {
+                            const el = document.getElementById("github-integration-panel");
+                            if (el) el.scrollIntoView({ behavior: "smooth" });
+                            else notify("Configure repository connections in the GitHub panel below.");
+                          }}
+                        >
+                          Configure
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="integration-row">
-                      <div className="integration-icon github-mark">GH</div>
-                      <span>
-                        <b>GitHub</b>
-                        <small>Repository activity and pull requests</small>
-                      </span>
-                      <span className="integration-status">Not connected</span>
-                      <button
-                        className="button button-secondary small-button"
-                        onClick={() => notify("GitHub OAuth requires GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET")}
-                      >
-                        Configure
-                      </button>
+                    {/* Google Calendar */}
+                    <div className="integration-card-row">
+                      <div className="integration-left">
+                        <div className="integration-icon-wrap google-cal-bg">
+                          <CalendarDays size={18} />
+                        </div>
+                        <div className="integration-info">
+                          <div className="integration-title-line">
+                            <b className="integration-name">Google Calendar</b>
+                            <span className="integration-status-pill">Available</span>
+                          </div>
+                          <p className="integration-desc">Synchronize project milestones, meeting schedules, and sprint timelines.</p>
+                        </div>
+                      </div>
+                      <div className="integration-right">
+                        <button
+                          className="button button-secondary small-button"
+                          onClick={() => {
+                            const el = document.getElementById("google-workspace-panel");
+                            if (el) el.scrollIntoView({ behavior: "smooth" });
+                            else notify("Connect Google Calendar in the Google Workspace panel below.");
+                          }}
+                        >
+                          Configure
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="integration-row">
-                      <div className="integration-icon google-mark">G</div>
-                      <span>
-                        <b>Google Calendar</b>
-                        <small>Project meetings and schedules</small>
-                      </span>
-                      <span className="integration-status">Not connected</span>
-                      <button
-                        className="button button-secondary small-button"
-                        onClick={() => notify("Google OAuth requires GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET")}
-                      >
-                        Configure
-                      </button>
+                    {/* Gmail */}
+                    <div className="integration-card-row">
+                      <div className="integration-left">
+                        <div className="integration-icon-wrap gmail-bg">
+                          <Mail size={18} />
+                        </div>
+                        <div className="integration-info">
+                          <div className="integration-title-line">
+                            <b className="integration-name">Gmail</b>
+                            <span className="integration-status-pill">Available</span>
+                          </div>
+                          <p className="integration-desc">Authorized read-only thread extraction and client context grounding.</p>
+                        </div>
+                      </div>
+                      <div className="integration-right">
+                        <button
+                          className="button button-secondary small-button"
+                          onClick={() => {
+                            const el = document.getElementById("google-workspace-panel");
+                            if (el) el.scrollIntoView({ behavior: "smooth" });
+                            else notify("Configure Gmail sync in the Google Workspace panel below.");
+                          }}
+                        >
+                          Configure
+                        </button>
+                      </div>
                     </div>
+                  </div>
+                </section>
 
-                    <div className="integration-row">
-                      <div className="integration-icon gmail-mark"><MessageSquare size={15} /></div>
-                      <span>
-                        <b>Gmail</b>
-                        <small>Authorized email context</small>
-                      </span>
-                      <span className="integration-status">Not connected</span>
-                      <button
-                        className="button button-secondary small-button"
-                        onClick={() => notify("Gmail access requires configured Google OAuth scopes")}
-                      >
-                        Configure
-                      </button>
-                    </div>
-                  </section>
-
-                  {/* Appearance Theme Switch (Tested in Playwright) */}
-                  <section className="panel settings-panel appearance-panel">
+                {/* Appearance Section */}
+                <section id="settings-appearance" className="panel settings-card-panel appearance-section">
+                  <div className="panel-head">
                     <div>
                       <div className="eyebrow">PERSONALIZATION</div>
                       <h2>Appearance</h2>
-                      <p>Choose a comfortable theme for your workspace.</p>
+                      <p className="section-desc">Choose a comfortable theme for your workspace. Changes apply immediately.</p>
+                    </div>
+                  </div>
+
+                  <div className="theme-options-grid">
+                    {/* Dark Mode Card */}
+                    <div
+                      className={`theme-option-card ${dark ? "active" : ""}`}
+                      onClick={() => { if (!dark) toggleTheme(); }}
+                    >
+                      <div className="theme-preview dark-preview">
+                        <div className="preview-nav-mock dark-nav">
+                          <span className="mock-dot" />
+                          <span className="mock-dot" />
+                        </div>
+                        <div className="preview-body-mock dark-body">
+                          <div className="preview-header-mock dark-header" />
+                          <div className="preview-content-mock">
+                            <div className="mock-card dark-card" />
+                            <div className="mock-card dark-card accent-card" />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="theme-option-footer">
+                        <div className="theme-option-info">
+                          <b>Obsidian &amp; Jade</b>
+                          <small>Deep obsidian canvas with vibrant jade accents</small>
+                        </div>
+                        <div className="theme-radio">
+                          {dark && <div className="theme-radio-inner" />}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Light Mode Card */}
+                    <div
+                      className={`theme-option-card ${!dark ? "active" : ""}`}
+                      onClick={() => { if (dark) toggleTheme(); }}
+                    >
+                      <div className="theme-preview light-preview">
+                        <div className="preview-nav-mock light-nav">
+                          <span className="mock-dot" />
+                          <span className="mock-dot" />
+                        </div>
+                        <div className="preview-body-mock light-body">
+                          <div className="preview-header-mock light-header" />
+                          <div className="preview-content-mock">
+                            <div className="mock-card light-card" />
+                            <div className="mock-card light-card accent-card" />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="theme-option-footer">
+                        <div className="theme-option-info">
+                          <b>Warm Neutral &amp; Deep Jade</b>
+                          <small>Refined warm grey-green canvas without stark glare</small>
+                        </div>
+                        <div className="theme-radio">
+                          {!dark && <div className="theme-radio-inner" />}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="appearance-quick-bar">
+                    <div className="quick-toggle-copy">
+                      <Zap size={15} />
+                      <span>Instant theme switch:</span>
                     </div>
                     <button className={`theme-switch ${dark ? "on" : ""}`} onClick={toggleTheme}>
                       <i />
                       {dark ? "Dark mode" : "Light mode"}
                     </button>
-                  </section>
-                </div>
+                  </div>
+                </section>
               </div>
-            </>
+            </div>
           )}
 
           {page === "Settings" && (
-            <GitHubIntegration
-              projects={projects}
-              canManage={workspace?.role === "OWNER" || workspace?.role === "ADMIN"}
-              notify={notify}
-            />
+            <div id="github-integration-panel" className="settings-integration-wrapper">
+              <GitHubIntegration
+                projects={projects}
+                canManage={workspace?.role === "OWNER" || workspace?.role === "ADMIN"}
+                notify={notify}
+              />
+            </div>
           )}
 
           {page === "Settings" && (
-            <StorageManagement
-              projects={projects}
-              canManage={workspace?.role === "OWNER" || workspace?.role === "ADMIN"}
-              notify={notify}
-            />
+            <div id="storage-management-panel" className="settings-integration-wrapper">
+              <StorageManagement
+                projects={projects}
+                canManage={workspace?.role === "OWNER" || workspace?.role === "ADMIN"}
+                notify={notify}
+              />
+            </div>
           )}
 
           {page === "Settings" && (
-            <GoogleWorkspaceIntegration
-              projects={projects}
-              canManage={workspace?.role === "OWNER" || workspace?.role === "ADMIN"}
-              notify={notify}
-            />
+            <div id="google-workspace-panel" className="settings-integration-wrapper">
+              <GoogleWorkspaceIntegration
+                projects={projects}
+                canManage={workspace?.role === "OWNER" || workspace?.role === "ADMIN"}
+                notify={notify}
+              />
+            </div>
           )}
         </div>
       </main>
