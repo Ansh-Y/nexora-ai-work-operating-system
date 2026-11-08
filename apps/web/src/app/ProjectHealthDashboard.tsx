@@ -186,12 +186,12 @@ export default function ProjectHealthDashboard({
   }
 
   const getScoreColor = (score: number | null, classification: string) => {
-    if (classification === "INSUFFICIENT_DATA") return "#94a3b8";
-    if (classification === "EXCLUDED") return "#94a3b8";
-    if (score === null) return "#94a3b8";
-    if (score >= 80) return "#10b981";
-    if (score >= 50) return "#f59e0b";
-    return "#ef4444";
+    if (classification === "INSUFFICIENT_DATA") return "#748984";
+    if (classification === "EXCLUDED") return "#748984";
+    if (score === null) return "#748984";
+    if (score >= 80) return "#48B58D";
+    if (score >= 50) return "#D5A65A";
+    return "#E66D70";
   };
 
   const getScoreBadgeClass = (classification: string) => {
@@ -287,34 +287,34 @@ export default function ProjectHealthDashboard({
               <small className="health-stat-sub">Tracked in this workspace</small>
             </div>
             <div className="health-stat-card healthy-border">
-              <span className="health-stat-label" style={{ color: "#10b981" }}>
+              <span className="health-stat-label" style={{ color: "var(--success)" }}>
                 <CheckCircle2 size={13} /> Healthy (80–100)
               </span>
-              <b className="health-stat-value" style={{ color: "#10b981" }}>
+              <b className="health-stat-value" style={{ color: "var(--success)" }}>
                 {overview.metrics.healthyCount}
               </b>
               <small className="health-stat-sub">On-track deliverables</small>
             </div>
             <div className="health-stat-card at-risk-border">
-              <span className="health-stat-label" style={{ color: "#f59e0b" }}>
+              <span className="health-stat-label" style={{ color: "var(--warning)" }}>
                 <AlertTriangle size={13} /> At Risk (50–79)
               </span>
-              <b className="health-stat-value" style={{ color: "#f59e0b" }}>
+              <b className="health-stat-value" style={{ color: "var(--warning)" }}>
                 {overview.metrics.atRiskCount}
               </b>
               <small className="health-stat-sub">Require monitoring</small>
             </div>
             <div className="health-stat-card critical-border">
-              <span className="health-stat-label" style={{ color: "#ef4444" }}>
+              <span className="health-stat-label" style={{ color: "var(--danger)" }}>
                 <AlertOctagon size={13} /> Critical (0–49)
               </span>
-              <b className="health-stat-value" style={{ color: "#ef4444" }}>
+              <b className="health-stat-value" style={{ color: "var(--danger)" }}>
                 {overview.metrics.criticalCount}
               </b>
               <small className="health-stat-sub">Immediate action needed</small>
             </div>
             <div className="health-stat-card">
-              <span className="health-stat-label" style={{ color: "#ef4444" }}>
+              <span className="health-stat-label" style={{ color: "var(--danger)" }}>
                 <ShieldAlert size={13} /> High-Severity Risks
               </span>
               <b className="health-stat-value">
@@ -329,7 +329,7 @@ export default function ProjectHealthDashboard({
             <div className="health-attention-panel">
               <div className="panel-head">
                 <div>
-                  <div className="eyebrow" style={{ color: "#b45309" }}>
+                  <div className="eyebrow" style={{ color: "var(--warning)" }}>
                     <AlertTriangle size={12} /> ATTENTION REQUIRED
                   </div>
                   <h2>Projects requiring immediate leadership focus</h2>
@@ -502,7 +502,7 @@ export default function ProjectHealthDashboard({
             <div className="panel ai-explanation-panel">
               <div className="panel-head">
                 <div>
-                  <div className="eyebrow" style={{ color: "#7c3aed" }}>
+                  <div className="eyebrow" style={{ color: "var(--accent)" }}>
                     <Sparkles size={13} /> EXECUTIVE PM INSIGHT
                   </div>
                   <h2>AI Health &amp; Risk Synthesis</h2>
@@ -797,7 +797,7 @@ export default function ProjectHealthDashboard({
 
             {filteredRisks.length === 0 ? (
               <div className="empty-inline" style={{ padding: "30px 10px" }}>
-                <CheckCircle2 size={24} style={{ color: "#10b981", marginBottom: "8px" }} />
+                <CheckCircle2 size={24} style={{ color: "var(--success)", marginBottom: "8px" }} />
                 <h3>No risks match the selected filter criteria</h3>
                 <p>All monitored risk indicators are within safe thresholds.</p>
               </div>
@@ -825,7 +825,7 @@ export default function ProjectHealthDashboard({
 
                     <div className="risk-recommendation-box">
                       <div className="rec-header">
-                        <Zap size={13} style={{ color: "#f59e0b" }} />
+                        <Zap size={13} style={{ color: "var(--warning)" }} />
                         <b>Recommended Action:</b>
                       </div>
                       <p>{risk.recommendedAction}</p>

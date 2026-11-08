@@ -1104,8 +1104,7 @@ export default function Home() {
         <header className="topbar">
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <button
-              className="icon-button md:hidden"
-              style={{ display: "inline-grid" }}
+              className="icon-button mobile-menu-btn"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               aria-label="Toggle navigation menu"
             >
