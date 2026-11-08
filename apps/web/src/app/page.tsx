@@ -23,6 +23,7 @@ import {
   ExternalLink,
   FileText,
   Filter,
+  Flag,
   Folder,
   GitBranch,
   HardDrive,
@@ -104,7 +105,7 @@ type Proposal = {
   proposed: {
     projectName: string;
     projectDescription: string;
-    milestones: { title: string }[];
+    milestones: { title: string; targetDate?: string | null }[];
     assumptions: string[];
     tasks: PlanTask[];
   };
@@ -248,6 +249,24 @@ export default function Home() {
     );
     window.history.replaceState({}, "", window.location.pathname);
   }, [token, notify]);
+
+  const proposalScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (modal || commentTask) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [modal, commentTask]);
+
+  useEffect(() => {
+    if (proposal && proposalScrollRef.current) {
+      proposalScrollRef.current.scrollTop = 0;
+    }
+  }, [proposal]);
 
   const handleError = (e: unknown) => {
     setError(e instanceof ApiError ? e.message : "Something went wrong. Please try again.");
@@ -2849,8 +2868,8 @@ export default function Home() {
             if (e.target === e.currentTarget && !busy) setModal(null);
           }}
         >
-          <div className={`modal-card ${modal === "plan" ? "plan-modal" : ""}`}>
-            <div className="modal-head">
+          <div className={`modal-card ${modal === "plan" ? "plan-modal" : ""} ${modal === "plan" && proposal ? "has-proposal" : ""}`}>
+            <div className={`modal-head ${modal === "plan" ? "plan-modal-head" : ""}`}>
               <div>
                 <div className="eyebrow">
                   {modal === "plan"
@@ -3100,63 +3119,100 @@ export default function Home() {
 
             {modal === "plan" && proposal && (
               <div className="proposal-review">
-                <div className="proposal-project">
-                  <span className="project-symbol symbol-0"><Blocks size={18} /></span>
-                  <div className="proposal-project-details">
-                    <b className="proposal-proj-title">{proposal.proposed.projectName}</b>
-                    <small className="proposal-proj-desc">{proposal.proposed.projectDescription}</small>
-                  </div>
-                </div>
-                <div className="review-summary">
-                  <span className="review-stat-pill"><b>{proposal.proposed.tasks.length}</b> proposed tasks</span>
-                  <span className="review-stat-pill"><b>{proposal.proposed.milestones.length}</b> milestones</span>
-                  <span className="review-provider-badge">
-                    {proposal.provider === "local_rules" ? "Local draft" : "AI generated"}
-                  </span>
-                </div>
-                {proposal.proposed.assumptions?.length > 0 && (
-                  <div className="assumption-note">
-                    <div className="assumption-icon"><CircleHelp size={16} /></div>
-                    <div className="assumption-text">
-                      <b>Assumptions to review</b>
-                      <p>{proposal.proposed.assumptions.join(" ")}</p>
-                    </div>
-                  </div>
-                )}
-                <div className="review-task-list">
-                  {proposal.proposed.tasks.map((t, i) => (
-                    <div className="review-task review-task-card" key={i}>
-                      <div className="review-task-head">
-                        <span className="review-index">#{String(i + 1).padStart(2, "0")}</span>
-                        <b className="review-task-title">{t.title}</b>
-                        <span className={`priority-label priority-pill ${(t.priority || "MEDIUM").toLowerCase()}`}>
-                          {t.priority || "MEDIUM"}
-                        </span>
-                      </div>
-                      {t.description && <p className="review-task-desc">{t.description}</p>}
-                      <div className="review-task-meta-bar">
-                        <span className="review-meta-item">
-                          <User size={12} /> {(t.assigneeId ? members.find(m => m.user.id === t.assigneeId)?.user.name : null) || "Proposed: Unassigned"}
-                        </span>
-                        <span className="review-meta-item">
-                          <Calendar size={12} /> {t.dueDate ? dueLabel(t.dueDate) : "No date set"}
-                        </span>
-                        {t.blockedBy?.length ? (
-                          <span className="review-meta-item dep-chip">
-                            <GitBranch size={12} /> Depends on #{t.blockedBy.map(x => x + 1).join(", #")}
-                          </span>
-                        ) : null}
+                <div className="proposal-review-body" ref={proposalScrollRef}>
+                  <div className="proposal-project-card proposal-project">
+                    <div className="proposal-project-header">
+                      <span className="project-symbol symbol-0"><Blocks size={18} /></span>
+                      <div className="proposal-project-title-area">
+                        <div className="eyebrow">PROJECT PROPOSAL</div>
+                        <h3 className="proposal-proj-title">{proposal.proposed.projectName}</h3>
                       </div>
                     </div>
-                  ))}
+                    {proposal.proposed.projectDescription && (
+                      <div className="proposal-brief-container proposal-proj-desc">
+                        <FormattedBrief content={proposal.proposed.projectDescription} />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="review-summary">
+                    <span className="review-stat-pill"><b>{proposal.proposed.tasks.length}</b> proposed tasks</span>
+                    <span className="review-stat-pill"><b>{proposal.proposed.milestones?.length || 0}</b> milestones</span>
+                    <span className="review-provider-badge">
+                      {proposal.provider === "local_rules" ? "Local draft" : "AI generated"}
+                    </span>
+                  </div>
+
+                  {proposal.proposed.milestones?.length > 0 && (
+                    <div className="proposal-milestones-card">
+                      <div className="proposal-section-subtitle">
+                        <Target size={13} /> Target Milestones ({proposal.proposed.milestones.length})
+                      </div>
+                      <div className="proposal-milestone-grid">
+                        {proposal.proposed.milestones.map((m, idx) => (
+                          <div className="proposal-milestone-item" key={idx}>
+                            <Flag size={12} className="milestone-icon" />
+                            <span className="milestone-title">{m.title}</span>
+                            {m.targetDate && (
+                              <span className="milestone-date">{dueLabel(m.targetDate)}</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {proposal.proposed.assumptions?.length > 0 && (
+                    <div className="assumption-note">
+                      <div className="assumption-icon"><CircleHelp size={16} /></div>
+                      <div className="assumption-text">
+                        <b>Assumptions to review</b>
+                        <p>{proposal.proposed.assumptions.join(" ")}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="review-task-section">
+                    <div className="proposal-section-subtitle">
+                      <List size={13} /> Proposed Task Breakdown ({proposal.proposed.tasks.length})
+                    </div>
+                    <div className="review-task-list">
+                      {proposal.proposed.tasks.map((t, i) => (
+                        <div className="review-task review-task-card" key={i}>
+                          <div className="review-task-head">
+                            <span className="review-index">#{String(i + 1).padStart(2, "0")}</span>
+                            <b className="review-task-title">{t.title}</b>
+                            <span className={`priority-label priority-pill ${(t.priority || "MEDIUM").toLowerCase()}`}>
+                              {t.priority || "MEDIUM"}
+                            </span>
+                          </div>
+                          {t.description && <p className="review-task-desc">{t.description}</p>}
+                          <div className="review-task-meta-bar">
+                            <span className="review-meta-item">
+                              <User size={12} /> {(t.assigneeId ? members.find(m => m.user.id === t.assigneeId)?.user.name : null) || "Proposed: Unassigned"}
+                            </span>
+                            <span className="review-meta-item">
+                              <Calendar size={12} /> {t.dueDate ? dueLabel(t.dueDate) : "No date set"}
+                            </span>
+                            {t.blockedBy?.length ? (
+                              <span className="review-meta-item dep-chip">
+                                <GitBranch size={12} /> Depends on #{t.blockedBy.map(x => x + 1).join(", #")}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-                <div className="review-footer">
-                  <span><ShieldCheck size={14} /> Changes are logged in the workspace audit.</span>
-                  <div>
-                    <button className="button button-secondary" disabled={busy} onClick={() => decideProposal(false)}>
-                      Decline
+
+                <div className="review-footer plan-modal-footer">
+                  <span className="review-audit-hint"><ShieldCheck size={14} /> Changes are logged in the workspace audit.</span>
+                  <div className="review-footer-actions">
+                    <button type="button" className="button button-secondary" disabled={busy} onClick={() => decideProposal(false)}>
+                      Cancel
                     </button>
-                    <button className="button button-primary" disabled={busy} onClick={() => decideProposal(true)}>
+                    <button type="button" className="button button-primary" disabled={busy} onClick={() => decideProposal(true)}>
                       {busy ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />} Approve and create
                     </button>
                   </div>
@@ -3858,6 +3914,129 @@ function ModalFooter({
       </button>
     </div>
   );
+}
+
+function FormattedBrief({ content }: { content: string }) {
+  if (!content) return null;
+
+  const rawLines = content.split(/\r?\n/);
+  const elements: React.ReactNode[] = [];
+  let currentList: { type: "ul" | "ol"; items: string[] } | null = null;
+
+  const flushList = () => {
+    if (currentList) {
+      if (currentList.type === "ul") {
+        elements.push(
+          <ul key={`brief-ul-${elements.length}`} className="brief-bullet-list">
+            {currentList.items.map((item, idx) => (
+              <li key={idx}>{renderInlineMarkdown(item)}</li>
+            ))}
+          </ul>
+        );
+      } else {
+        elements.push(
+          <ol key={`brief-ol-${elements.length}`} className="brief-numbered-list">
+            {currentList.items.map((item, idx) => (
+              <li key={idx}>{renderInlineMarkdown(item)}</li>
+            ))}
+          </ol>
+        );
+      }
+      currentList = null;
+    }
+  };
+
+  for (let i = 0; i < rawLines.length; i++) {
+    const rawLine = rawLines[i];
+    const line = rawLine.trim();
+
+    if (!line) {
+      flushList();
+      continue;
+    }
+
+    // Markdown heading: ## Heading or ### Heading
+    const hashHeading = line.match(/^#{1,4}\s+(.+)$/);
+    if (hashHeading) {
+      flushList();
+      elements.push(
+        <h4 key={`h-${i}`} className="brief-section-heading">
+          {hashHeading[1].replace(/[:：]\s*$/, "").trim()}
+        </h4>
+      );
+      continue;
+    }
+
+    // Bold section heading standalone: **Project objective:** or **Project objective**
+    const boldStandaloneHeading = line.match(/^\*\*([^*]+)\*\*[:]?$/);
+    if (boldStandaloneHeading) {
+      flushList();
+      elements.push(
+        <h4 key={`bh-${i}`} className="brief-section-heading">
+          {boldStandaloneHeading[1].replace(/[:：]\s*$/, "").trim()}
+        </h4>
+      );
+      continue;
+    }
+
+    // Bold section heading with trailing text on same line: **Project objective:** Launch the system
+    const boldInlineHeading = line.match(/^\*\*([^*]+)\*\*:\s*(.+)$/);
+    if (boldInlineHeading) {
+      flushList();
+      elements.push(
+        <h4 key={`bih-${i}`} className="brief-section-heading">
+          {boldInlineHeading[1].replace(/[:：]\s*$/, "").trim()}
+        </h4>
+      );
+      elements.push(
+        <p key={`bip-${i}`} className="brief-paragraph">
+          {renderInlineMarkdown(boldInlineHeading[2].trim())}
+        </p>
+      );
+      continue;
+    }
+
+    // Numbered list item: 1. Item or 1) Item
+    const numberedItem = line.match(/^\d+[\.\)]\s+(.+)$/);
+    if (numberedItem) {
+      if (currentList && currentList.type !== "ol") flushList();
+      if (!currentList) currentList = { type: "ol", items: [] };
+      currentList.items.push(numberedItem[1]);
+      continue;
+    }
+
+    // Bullet list item: - Item or * Item or • Item
+    const bulletItem = line.match(/^[-*•]\s+(.+)$/);
+    if (bulletItem) {
+      if (currentList && currentList.type !== "ul") flushList();
+      if (!currentList) currentList = { type: "ul", items: [] };
+      currentList.items.push(bulletItem[1]);
+      continue;
+    }
+
+    // Normal paragraph text
+    flushList();
+    elements.push(
+      <p key={`p-${i}`} className="brief-paragraph">
+        {renderInlineMarkdown(line)}
+      </p>
+    );
+  }
+
+  flushList();
+
+  return <div className="brief-formatted-content">{elements}</div>;
+}
+
+function renderInlineMarkdown(text: string): React.ReactNode[] {
+  if (!text) return [];
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, index) => {
+    if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
+      return <strong key={index}>{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
 }
 
 function ActivityList({ events }: { events: any[] }) {

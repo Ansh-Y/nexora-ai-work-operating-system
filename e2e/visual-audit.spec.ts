@@ -80,9 +80,25 @@ test('visual audit of AI Command Center, Inbox, Meeting Form, Details, and Healt
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole('button', { name: 'Create a project plan' }).click();
   await expect(page.getByRole('heading', { name: 'Start with the brief' })).toBeVisible();
-  await page.getByLabel('What are you planning?').fill('Launch Next-Gen AI Workspace platform with automated brief tools, dependency detection, and team approval review.');
+  await page.getByLabel('What are you planning?').fill(`**Project objective:**
+Upgrade the core workflow engine to support multi-tenant isolation, real-time collaboration, and automated dependency graphs.
+
+**Key deliverables:**
+1. Unified WebSocket gateway for real-time task sync and collaboration
+2. Dependency cycle validation engine preventing circular blockers
+3. Automated critical-path scheduling calculator
+4. Predictive risk engine analyzing deadline velocity and stalled work
+5. Enterprise storage with AES-256-GCM encryption and audit logging
+6. Executive health dashboard with trend sparklines and risk factor breakdown
+
+**Constraints & assumptions:**
+- Zero downtime during database migration and deployment
+- Strict tenant data isolation enforced at service layer
+- High contrast accessible Obsidian and Jade design system`);
   await page.locator('form').getByRole('button', { name: 'Generate plan draft' }).click();
   await expect(page.locator('.proposal-review')).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('.brief-section-heading').first()).toHaveText('Project objective');
+  await expect(page.locator('.brief-numbered-list')).toBeVisible();
   await page.screenshot({ path: path.join(ARTIFACT_DIR, 'audit-plan-proposal-review.png') });
   await page.getByRole('button', { name: 'Approve and create' }).click();
   await expect(page.locator('.proposal-review')).toHaveCount(0);

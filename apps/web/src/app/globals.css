@@ -5069,48 +5069,250 @@ button:disabled {
   white-space: nowrap;
 }
 
-/* Proposal Review Header & Summary */
-.proposal-project {
+/* ==========================================================================
+   AI PROJECT PLANNER PROPOSAL REVIEW MODAL (FIX MODAL SCROLLING)
+   ========================================================================== */
+
+.modal-card.plan-modal {
+  width: 100%;
+  max-width: 600px;
+  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  background: var(--surface-elevated);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+}
+
+.modal-card.plan-modal.has-proposal {
+  max-width: 780px;
+}
+
+.plan-modal .modal-head,
+.plan-modal-head {
+  padding: 18px 24px;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-elevated);
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.plan-modal .modal-form {
+  padding: 20px 24px;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+}
+
+.proposal-review {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.proposal-review-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Custom scrollbar */
+.proposal-review-body::-webkit-scrollbar {
+  width: 6px;
+}
+.proposal-review-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.proposal-review-body::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 3px;
+}
+.proposal-review-body::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
+/* Proposal Project Card & Formatted Brief */
+.proposal-project-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: var(--panel-subtle);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.proposal-project-header {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px;
-  background: var(--panel-subtle);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  margin-bottom: 12px;
 }
 
-.proposal-project-details {
+.proposal-project-title-area {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
 }
 
 .proposal-proj-title {
-  font-size: 14.5px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text);
+  margin: 0;
 }
 
-.proposal-proj-desc {
-  font-size: 12.5px;
+.proposal-brief-container {
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  line-height: 1.6;
   color: var(--muted);
 }
 
+.brief-section-heading {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 12px 0 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: -0.01em;
+}
+
+.brief-section-heading:first-child {
+  margin-top: 0;
+}
+
+.brief-paragraph {
+  margin: 0 0 8px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.brief-paragraph:last-child {
+  margin-bottom: 0;
+}
+
+.brief-paragraph strong,
+.brief-bullet-list strong,
+.brief-numbered-list strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.brief-bullet-list {
+  margin: 4px 0 10px 0;
+  padding-left: 20px;
+  list-style-type: disc;
+  color: var(--muted);
+}
+
+.brief-bullet-list li {
+  margin-bottom: 4px;
+  line-height: 1.5;
+}
+
+.brief-numbered-list {
+  margin: 4px 0 10px 0;
+  padding-left: 20px;
+  list-style-type: decimal;
+  color: var(--muted);
+}
+
+.brief-numbered-list li {
+  margin-bottom: 4px;
+  line-height: 1.5;
+}
+
+/* Proposal Milestones */
+.proposal-milestones-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--panel-subtle);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.proposal-section-subtitle {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.proposal-milestone-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.proposal-milestone-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.milestone-icon {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.milestone-title {
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.milestone-date {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Summary Pills */
 .review-summary {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
-  margin-bottom: 12px;
 }
 
 .review-stat-pill {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 10px;
+  padding: 5px 12px;
   border-radius: 6px;
   background: var(--panel-subtle);
   border: 1px solid var(--line);
@@ -5123,13 +5325,14 @@ button:disabled {
   align-items: center;
   font-size: 11px;
   font-weight: 600;
-  padding: 3px 8px;
-  border-radius: 4px;
+  padding: 4px 10px;
+  border-radius: 5px;
   background: var(--primary-wash);
   color: var(--primary);
   margin-left: auto;
 }
 
+/* Assumptions Note */
 .assumption-note {
   display: flex;
   align-items: flex-start;
@@ -5138,7 +5341,6 @@ button:disabled {
   background: rgba(213, 166, 90, 0.1);
   border: 1px solid rgba(213, 166, 90, 0.3);
   border-radius: 8px;
-  margin-bottom: 14px;
 }
 
 .assumption-icon {
@@ -5165,16 +5367,32 @@ button:disabled {
   margin: 0;
 }
 
-/* Proposal Review Task Cards */
+/* Review Tasks */
+.review-task-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.review-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .review-task-card {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 14px;
+  padding: 14px 16px;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 10px;
-  margin-bottom: 10px;
+  transition: border-color 0.15s ease;
+}
+
+.review-task-card:hover {
+  border-color: var(--line-strong);
 }
 
 .review-task-head {
@@ -5224,6 +5442,34 @@ button:disabled {
 .review-meta-item.dep-chip {
   color: var(--amber);
   font-weight: 500;
+}
+
+/* Review Modal Footer */
+.plan-modal-footer,
+.review-footer {
+  flex-shrink: 0;
+  padding: 16px 24px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 0;
+}
+
+.review-audit-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.review-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 /* ==========================================================================
@@ -5652,5 +5898,47 @@ button:disabled {
   .health-history-single {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .modal-card.plan-modal {
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: calc(100vh - 20px) !important;
+    max-height: calc(100dvh - 20px) !important;
+    border-radius: var(--radius-sm);
+  }
+
+  .plan-modal .modal-head,
+  .plan-modal-head {
+    padding: 14px 16px;
+  }
+
+  .proposal-review-body {
+    padding: 14px 16px;
+    gap: 12px;
+  }
+
+  .plan-modal-footer,
+  .review-footer {
+    padding: 12px 16px;
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .review-footer-actions {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .review-footer-actions .button {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .review-audit-hint {
+    justify-content: center;
+    font-size: 11px;
   }
 }
