@@ -80,6 +80,31 @@ enum GitHubAutomationRunStatus {
   SKIPPED
 }
 
+enum WorkflowTriggerType {
+  TASK_OVERDUE
+  TASK_STATUS_CHANGED
+  TASK_MARKED_BLOCKED
+  PROJECT_HEALTH_AT_RISK
+  MILESTONE_APPROACHING
+  TASK_CREATED
+}
+
+enum WorkflowActionType {
+  AI_TASK_RECOMMENDATION
+  RECOMMEND_TASK_ASSIGNEE
+  NOTIFY_PROJECT_MANAGER
+  GENERATE_HEALTH_SUMMARY
+  CREATE_TASK_PROPOSAL
+}
+
+enum WorkflowRunStatus {
+  PENDING_APPROVAL
+  APPROVED
+  EXECUTED
+  REJECTED
+  FAILED
+}
+
 enum StorageUploadStatus {
   PENDING
   READY
@@ -158,6 +183,9 @@ model User {
   createdGitHubRules        GitHubAutomationRule[] @relation("GitHubRuleCreator")
   updatedGitHubRules        GitHubAutomationRule[] @relation("GitHubRuleUpdater")
   reviewedGitHubRuns        GitHubAutomationRun[]  @relation("GitHubRunReviewer")
+  createdWorkflowRules      WorkflowAutomationRule[] @relation("WorkflowRuleCreator")
+  updatedWorkflowRules      WorkflowAutomationRule[] @relation("WorkflowRuleUpdater")
+  reviewedWorkflowRuns      WorkflowAutomationRun[]  @relation("WorkflowRunReviewer")
   appliedHolds              FileRetentionHold[]    @relation("HoldApplier")
   releasedHolds             FileRetentionHold[]    @relation("HoldReleaser")
   googleConnections         GoogleConnection[]   @relation("GoogleConnectionOwner")
@@ -197,6 +225,8 @@ model Organization {
   refreshSessions     RefreshSession[]
   gitHubAutomationRules GitHubAutomationRule[]
   gitHubAutomationRuns  GitHubAutomationRun[]
+  workflowAutomationRules WorkflowAutomationRule[]
+  workflowAutomationRuns  WorkflowAutomationRun[]
   storageObjects        StorageObject[]
   retentionPolicy       OrganizationRetentionPolicy?
   fileRetentionHolds    FileRetentionHold[]
@@ -272,6 +302,8 @@ model Project {
   githubRepositories GitHubRepository[]
   documents          Document[]
   gitHubAutomationRules GitHubAutomationRule[]
+  workflowAutomationRules WorkflowAutomationRule[]
+  workflowAutomationRuns  WorkflowAutomationRun[]
   googleCalendarEvents    GoogleCalendarEvent[]
   suggestedCalendarEvents GoogleCalendarEvent[] @relation("SuggestedCalendarProject")
   gmailMessages           GmailMessage[]
@@ -308,6 +340,7 @@ model Task {
   githubEvents             GitHubEvent[]
   gitHubAutomationRules    GitHubAutomationRule[]
   gitHubAutomationRuns     GitHubAutomationRun[]
+  workflowAutomationRuns   WorkflowAutomationRun[]
 
   @@index([organizationId, projectId, status])
   @@index([organizationId, assigneeId])
@@ -756,6 +789,67 @@ model GitHubAutomationRun {
   @@index([organizationId, status])
   @@index([organizationId, ruleId, createdAt])
   @@index([organizationId, taskId])
+}
+
+model WorkflowAutomationRule {
+  id                  String               @id @default(uuid()) @db.Uuid
+  organizationId      String               @db.Uuid
+  projectId           String?              @db.Uuid
+  name                String
+  description         String               @default("")
+  triggerEvent        WorkflowTriggerType
+  action              WorkflowActionType
+  conditions          Json                 @default("{}")
+  actionConfig        Json                 @default("{}")
+  requiresApproval    Boolean              @default(true)
+  isEnabled           Boolean              @default(true)
+  createdById         String               @db.Uuid
+  updatedById         String?              @db.Uuid
+  lastExecutedAt      DateTime?
+  lastExecutionStatus WorkflowRunStatus?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project             Project?             @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdBy           User                 @relation("WorkflowRuleCreator", fields: [createdById], references: [id])
+  updatedBy           User?                @relation("WorkflowRuleUpdater", fields: [updatedById], references: [id])
+  runs                WorkflowAutomationRun[]
+
+  @@index([organizationId, isEnabled])
+  @@index([organizationId, triggerEvent])
+}
+
+model WorkflowAutomationRun {
+  id             String               @id @default(uuid()) @db.Uuid
+  organizationId String               @db.Uuid
+  ruleId         String               @db.Uuid
+  projectId      String?              @db.Uuid
+  taskId         String?              @db.Uuid
+  milestoneId    String?              @db.Uuid
+  triggerEvent   WorkflowTriggerType
+  action         WorkflowActionType
+  status         WorkflowRunStatus    @default(PENDING_APPROVAL)
+  dedupeKey      String?
+  explanation    String               @default("")
+  proposedAction Json                 @default("{}")
+  executionResult Json?
+  errorMessage   String?
+  reviewedById   String?              @db.Uuid
+  reviewedAt     DateTime?
+  executedAt     DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  rule           WorkflowAutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  project        Project?             @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  task           Task?                @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  reviewedBy     User?                @relation("WorkflowRunReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
+  @@index([organizationId, ruleId, createdAt])
+  @@index([organizationId, dedupeKey])
 }
 
 model StorageObject {

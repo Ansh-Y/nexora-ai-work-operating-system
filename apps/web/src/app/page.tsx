@@ -64,6 +64,7 @@ import ProjectHealthDashboard from "./ProjectHealthDashboard";
 import CommandPalette from "./CommandPalette";
 import { AiAssistantWorkspace } from "./AiAssistantWorkspace";
 import SmartAssignmentModal from "./SmartAssignmentModal";
+import AutomationsWorkspace from "./AutomationsWorkspace";
 
 type User = { id: string; name: string; email: string };
 type Workspace = { id: string; name: string; role: string };
@@ -126,6 +127,7 @@ type Page =
   | "Meetings"
   | "Calendar"
   | "AI Assistant"
+  | "Automations"
   | "AI command"
   | "Inbox"
   | "Activity"
@@ -1207,6 +1209,7 @@ export default function Home() {
             ["Meetings", CalendarDays],
             ["Calendar", CalendarDays],
             ["AI Assistant", Bot],
+            ["Automations", Zap],
             ["AI command", Sparkles],
             ["Inbox", Bell],
           ] as const).map(([name, Icon]) => (
@@ -2072,6 +2075,18 @@ export default function Home() {
               notify={notify}
               user={user}
               workspace={workspace}
+            />
+          )}
+
+          {/* 6.6. AI WORKFLOW AUTOMATION */}
+          {page === "Automations" && (
+            <AutomationsWorkspace
+              projects={projects}
+              notify={notify}
+              onOpenProject={id => {
+                setActiveProjectId(id);
+                setPage("My work");
+              }}
             />
           )}
 

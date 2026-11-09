@@ -21,6 +21,7 @@ import {
   Sun,
   Target,
   X,
+  Zap,
 } from "lucide-react";
 
 export interface CommandItem {
@@ -126,6 +127,15 @@ export default function CommandPalette({
         icon: <Bot size={16} />,
         keywords: ["assistant", "chat", "ask", "q&a", "conversation", "bot", "copilot"],
         action: () => { onNavigate("AI Assistant"); onClose(); },
+      },
+      {
+        id: "nav-automations",
+        category: "Navigation",
+        label: "AI Workflow Automations",
+        badge: "Automations",
+        icon: <Zap size={16} />,
+        keywords: ["automation", "rules", "workflows", "triggers", "approvals", "actions", "runs"],
+        action: () => { onNavigate("Automations"); onClose(); },
       },
       {
         id: "nav-ai",

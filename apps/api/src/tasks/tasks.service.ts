@@ -1,5 +1,13 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { OrganizationRole, TaskStatus } from '@prisma/client';
+import {
+  BadRequestException,
+  ForbiddenException,
+  forwardRef,
+  Inject,
+  Injectable,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
+import { OrganizationRole, TaskStatus, WorkflowTriggerType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { Principal } from '../common/auth.types';
@@ -7,12 +15,21 @@ import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { CommentDto, CreateTaskDto, UpdateTaskDto } from './tasks.dto';
 import { wouldCreateCycle } from './dependency-graph';
 import { NotificationsService } from '../notifications/notifications.service';
+import { WorkflowAutomationService } from '../ai/workflow-automation.service';
 
 const writers: OrganizationRole[] = [OrganizationRole.OWNER, OrganizationRole.ADMIN, OrganizationRole.PROJECT_MANAGER, OrganizationRole.TEAM_MEMBER];
 
 @Injectable()
 export class TasksService {
-  constructor(private prisma: PrismaService, private audit: AuditService, private realtime: RealtimeGateway, private notifications: NotificationsService) {}
+  constructor(
+    private prisma: PrismaService,
+    private audit: AuditService,
+    private realtime: RealtimeGateway,
+    private notifications: NotificationsService,
+    @Optional()
+    @Inject(forwardRef(() => WorkflowAutomationService))
+    private automation?: WorkflowAutomationService,
+  ) {}
   async list(user: Principal, projectId: string) {
     await this.ensureProject(user.orgId, projectId);
     return this.prisma.task.findMany({ where: { organizationId: user.orgId, projectId }, include: { assignee: { select: { id: true, name: true } }, blockedBy: { include: { blockingTask: { select: { id: true, title: true, status: true } } } }, blocks: { include: { blockedTask: { select: { id: true, title: true, status: true, dueDate: true } } } } }, orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }] });
@@ -28,6 +45,26 @@ export class TasksService {
     await this.audit.append({ organizationId: user.orgId, actorType: 'USER', actorId: user.sub, action: 'task.created', targetType: 'task', targetId: task.id, metadata: { projectId, title: task.title } });
     if (task.assigneeId && task.assigneeId !== user.sub) await this.notifications.notifyUsers(user.orgId, [task.assigneeId], 'ASSIGNMENT', 'A task was assigned to you', task.title, `assignment:${task.id}:${task.updatedAt.toISOString()}`);
     this.changed(user.orgId, projectId, task.id, 'created');
+    if (this.automation) {
+      this.automation
+        .evaluateEvent(user.orgId, {
+          trigger: WorkflowTriggerType.TASK_CREATED,
+          organizationId: user.orgId,
+          projectId,
+          task: {
+            id: task.id,
+            projectId: task.projectId,
+            title: task.title,
+            description: task.description,
+            status: task.status,
+            priority: task.priority,
+            dueDate: task.dueDate,
+            assigneeId: task.assigneeId,
+            labels: task.labels,
+          },
+        })
+        .catch(() => undefined);
+    }
     return task;
   }
   async update(user: Principal, id: string, dto: UpdateTaskDto) {
@@ -48,6 +85,49 @@ export class TasksService {
       await this.notifications.notifyUsers(user.orgId, affectedAssignees.map(row => row.assigneeId!).filter(id => id !== user.sub), 'RISK', 'A dependency is blocked', `${task.title} may affect downstream work.`, `blocker:${task.id}:${task.updatedAt.toISOString()}`);
     }
     this.changed(user.orgId, task.projectId, task.id, 'updated');
+    if (this.automation) {
+      if (dto.status === TaskStatus.BLOCKED && current.status !== TaskStatus.BLOCKED) {
+        this.automation
+          .evaluateEvent(user.orgId, {
+            trigger: WorkflowTriggerType.TASK_MARKED_BLOCKED,
+            organizationId: user.orgId,
+            projectId: task.projectId,
+            task: {
+              id: task.id,
+              projectId: task.projectId,
+              title: task.title,
+              description: task.description,
+              status: task.status,
+              priority: task.priority,
+              dueDate: task.dueDate,
+              assigneeId: task.assigneeId,
+              labels: task.labels,
+            },
+            previousTaskState: { status: current.status, priority: current.priority },
+          })
+          .catch(() => undefined);
+      } else if (dto.status && dto.status !== current.status) {
+        this.automation
+          .evaluateEvent(user.orgId, {
+            trigger: WorkflowTriggerType.TASK_STATUS_CHANGED,
+            organizationId: user.orgId,
+            projectId: task.projectId,
+            task: {
+              id: task.id,
+              projectId: task.projectId,
+              title: task.title,
+              description: task.description,
+              status: task.status,
+              priority: task.priority,
+              dueDate: task.dueDate,
+              assigneeId: task.assigneeId,
+              labels: task.labels,
+            },
+            previousTaskState: { status: current.status },
+          })
+          .catch(() => undefined);
+      }
+    }
     return { ...task, impact: (dto.status || dto.dueDate || dto.startDate) ? { affectedTaskCount: downstream.length, affectedTasks: downstream } : undefined };
   }
   async remove(user: Principal, id: string) {
