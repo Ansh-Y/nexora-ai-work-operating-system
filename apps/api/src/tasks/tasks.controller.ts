@@ -11,6 +11,7 @@ import { CommentDto, CreateTaskDto, DependencyDto, UpdateTaskDto } from './tasks
 export class TasksController {
   constructor(private service: TasksService) {}
   @Get('projects/:projectId/tasks') list(@CurrentUser() user: Principal, @Param('projectId') projectId: string) { return this.service.list(user, projectId); }
+  @Get('tasks/:id') get(@CurrentUser() user: Principal, @Param('id') id: string) { return this.service.get(user, id); }
   @Post('projects/:projectId/tasks') create(@CurrentUser() user: Principal, @Param('projectId') projectId: string, @Body() dto: CreateTaskDto) { return this.service.create(user, projectId, dto); }
   @Patch('tasks/:id') update(@CurrentUser() user: Principal, @Param('id') id: string, @Body() dto: UpdateTaskDto) { return this.service.update(user, id, dto); }
   @Delete('tasks/:id') remove(@CurrentUser() user: Principal, @Param('id') id: string) { return this.service.remove(user, id); }

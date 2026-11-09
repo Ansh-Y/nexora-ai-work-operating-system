@@ -34,6 +34,19 @@ export class TasksService {
     await this.ensureProject(user.orgId, projectId);
     return this.prisma.task.findMany({ where: { organizationId: user.orgId, projectId }, include: { assignee: { select: { id: true, name: true } }, blockedBy: { include: { blockingTask: { select: { id: true, title: true, status: true } } } }, blocks: { include: { blockedTask: { select: { id: true, title: true, status: true, dueDate: true } } } } }, orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }] });
   }
+  async get(user: Principal, id: string) {
+    const task = await this.prisma.task.findFirst({
+      where: { id, organizationId: user.orgId },
+      include: {
+        assignee: { select: { id: true, name: true, email: true } },
+        project: { select: { id: true, name: true } },
+        blockedBy: { include: { blockingTask: { select: { id: true, title: true, status: true } } } },
+        blocks: { include: { blockedTask: { select: { id: true, title: true, status: true, dueDate: true } } } },
+      },
+    });
+    if (!task) throw new NotFoundException('Task not found');
+    return task;
+  }
   async create(user: Principal, projectId: string, dto: CreateTaskDto) {
     this.assertWritable(user);
     await this.ensureProject(user.orgId, projectId);

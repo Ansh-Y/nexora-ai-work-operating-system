@@ -127,3 +127,34 @@ export class DismissNotificationsDto {
   @IsOptional()
   category?: NotificationCategory;
 }
+
+export class CreateTestNotificationDto {
+  @ApiPropertyOptional({ description: 'Notification title' })
+  @IsString()
+  @IsOptional()
+  title?: string;
+
+  @ApiPropertyOptional({ description: 'Notification body description' })
+  @IsString()
+  @IsOptional()
+  body?: string;
+
+  @ApiPropertyOptional({ enum: NotificationCategory, description: 'Smart category' })
+  @IsEnum(NotificationCategory)
+  @IsOptional()
+  category?: NotificationCategory;
+
+  @ApiPropertyOptional({ enum: NotificationPriority, description: 'Smart priority level' })
+  @IsEnum(NotificationPriority)
+  @IsOptional()
+  priority?: NotificationPriority;
+
+  @ApiPropertyOptional({ description: 'Target contextual action URL' })
+  @IsString()
+  @IsOptional()
+  actionUrl?: string;
+
+  @ApiPropertyOptional({ description: 'Custom metadata payload' })
+  @IsOptional()
+  metadata?: Record<string, any>;
+}

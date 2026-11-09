@@ -23,6 +23,7 @@ import { Roles } from '../common/roles.decorator';
 import { RolesGuard } from '../common/roles.guard';
 import { NotificationsService } from './notifications.service';
 import {
+  CreateTestNotificationDto,
   DismissNotificationsDto,
   ListNotificationsQueryDto,
   UpdateNotificationPreferencesDto,
@@ -81,15 +82,7 @@ export class NotificationsController {
   @ApiOperation({ summary: 'Create a test smart notification for current user' })
   createTestNotification(
     @CurrentUser() user: Principal,
-    @Body()
-    body: {
-      title?: string;
-      body?: string;
-      category?: NotificationCategory;
-      priority?: NotificationPriority;
-      actionUrl?: string;
-      metadata?: any;
-    },
+    @Body() body: CreateTestNotificationDto,
   ) {
     return this.service.notifyUsers(
       user.orgId,

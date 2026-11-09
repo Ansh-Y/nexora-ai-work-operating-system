@@ -1290,6 +1290,7 @@ export default function Home() {
             className={`nav-link ${page === "Activity" ? "active" : ""}`}
             onClick={() => { setPage("Activity"); setMobileMenuOpen(false); }}
             title={sidebarCollapsed ? "Activity" : undefined}
+            aria-label="Activity"
           >
             <Activity size={17} />
             {!sidebarCollapsed && <span>Activity</span>}
@@ -1298,6 +1299,7 @@ export default function Home() {
             className={`nav-link ${page === "Settings" ? "active" : ""}`}
             onClick={() => { setPage("Settings"); setMobileMenuOpen(false); }}
             title={sidebarCollapsed ? "Settings" : undefined}
+            aria-label="Settings"
           >
             <Settings2 size={17} />
             {!sidebarCollapsed && <span>Settings</span>}

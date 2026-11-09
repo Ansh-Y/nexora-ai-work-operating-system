@@ -58,6 +58,10 @@ async function main() {
   let status = 1;
   try {
     status = run(process.execPath, [resolve(apiDirectory, '../../node_modules/prisma/build/index.js'), 'migrate', 'deploy'], env);
+    if (status === 0 && mode === 'browser') {
+      const tsxBin = resolve(rootDirectory, 'node_modules/tsx/dist/cli.mjs');
+      run(process.execPath, [tsxBin, resolve(apiDirectory, 'prisma/seed.ts')], env);
+    }
     if (status === 0 && mode === 'api') {
       const vitestBin = resolve(apiDirectory, '../../node_modules/vitest/vitest.mjs');
       status = run(process.execPath, [vitestBin, 'run', '--config', './vitest.config.mts', 'test/app.e2e-spec.ts'], env);

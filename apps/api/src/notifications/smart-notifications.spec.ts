@@ -256,6 +256,7 @@ describe('NotificationsService Unit Tests', () => {
     orgId: 'org-456',
     role: 'OWNER' as any,
     email: 'alex@nexora.local',
+    name: 'Alex Rivera',
   };
 
   beforeEach(() => {

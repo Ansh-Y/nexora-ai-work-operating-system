@@ -1,13 +1,43 @@
 import { PrismaClient, OrganizationRole, ProjectStatus, TaskStatus, Priority } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcryptjs';
+import { config as loadEnv } from 'dotenv';
+import { resolve } from 'node:path';
 
-const prisma = new PrismaClient();
+loadEnv({ path: resolve(process.cwd(), '../../.env') });
+loadEnv();
+
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) throw new Error('DATABASE_URL must be configured before running seed');
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
 async function main() {
   const passwordHash = await bcrypt.hash('NexoraDemo!2026', 12);
   const user = await prisma.user.upsert({ where: { email: 'demo@nexora.local' }, update: { name: 'Alex Morgan', passwordHash }, create: { email: 'demo@nexora.local', name: 'Alex Morgan', passwordHash } });
   const org = await prisma.organization.upsert({ where: { slug: 'nexora-demo' }, update: { name: 'Nexora Studio' }, create: { slug: 'nexora-demo', name: 'Nexora Studio' } });
   await prisma.membership.upsert({ where: { organizationId_userId: { organizationId: org.id, userId: user.id } }, update: { role: OrganizationRole.OWNER }, create: { organizationId: org.id, userId: user.id, role: OrganizationRole.OWNER } });
+
+  const jordan = await prisma.user.upsert({
+    where: { email: 'jordan@nexora.local' },
+    update: { name: 'Jordan Rivera', passwordHash },
+    create: { email: 'jordan@nexora.local', name: 'Jordan Rivera', passwordHash },
+  });
+  await prisma.membership.upsert({
+    where: { organizationId_userId: { organizationId: org.id, userId: jordan.id } },
+    update: { role: OrganizationRole.TEAM_MEMBER },
+    create: { organizationId: org.id, userId: jordan.id, role: OrganizationRole.TEAM_MEMBER },
+  });
+
+  const taylor = await prisma.user.upsert({
+    where: { email: 'taylor@nexora.local' },
+    update: { name: 'Taylor Chen', passwordHash },
+    create: { email: 'taylor@nexora.local', name: 'Taylor Chen', passwordHash },
+  });
+  await prisma.membership.upsert({
+    where: { organizationId_userId: { organizationId: org.id, userId: taylor.id } },
+    update: { role: OrganizationRole.PROJECT_MANAGER },
+    create: { organizationId: org.id, userId: taylor.id, role: OrganizationRole.PROJECT_MANAGER },
+  });
   const project = await prisma.project.upsert({ where: { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }, update: { name: 'Product Launch', organizationId: org.id }, create: { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', organizationId: org.id, ownerId: user.id, name: 'Product Launch', description: 'Launch the next generation of the Nexora workspace.', status: ProjectStatus.ACTIVE, priority: Priority.HIGH, dueDate: new Date(Date.now() + 21 * 86400000) } });
   const backend = await prisma.task.upsert({ where: { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' }, update: { projectId: project.id, organizationId: org.id }, create: { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', organizationId: org.id, projectId: project.id, title: 'Complete backend API', description: 'Finish authentication, workspace scoping, and task endpoints.', status: TaskStatus.BLOCKED, priority: Priority.URGENT, assigneeId: user.id, dueDate: new Date(Date.now() - 86400000) } });
   const launch = await prisma.task.upsert({ where: { id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' }, update: { projectId: project.id, organizationId: org.id }, create: { id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', organizationId: org.id, projectId: project.id, title: 'Prepare launch checklist', description: 'Coordinate final release readiness across teams.', status: TaskStatus.TODO, priority: Priority.HIGH, dueDate: new Date(Date.now() + 12 * 86400000) } });

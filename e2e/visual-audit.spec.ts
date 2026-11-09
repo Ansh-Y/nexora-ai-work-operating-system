@@ -106,15 +106,15 @@ Upgrade the core workflow engine to support multi-tenant isolation, real-time co
   // ==========================================
   // DEFECT 2: INBOX
   // ==========================================
-  await page.getByRole('button', { name: 'Inbox', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Inbox' })).toBeVisible();
+  await page.locator('button.nav-link[aria-label="Inbox"]').click();
+  await expect(page.getByRole('heading', { name: /Smart Notification Center|Inbox/i })).toBeVisible();
   await page.screenshot({ path: path.join(ARTIFACT_DIR, 'audit-inbox-dark-desktop.png'), fullPage: true });
 
   // Switch back to Light Theme for Inbox Light
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.locator('button.nav-link[aria-label="Settings"]').click();
   await page.locator('.theme-switch').click();
   await expect(page.locator('.app-shell')).not.toHaveClass(/dark/);
-  await page.getByRole('button', { name: 'Inbox', exact: true }).click();
+  await page.locator('button.nav-link[aria-label="Inbox"]').click();
   await page.screenshot({ path: path.join(ARTIFACT_DIR, 'audit-inbox-light-desktop.png'), fullPage: true });
 
   // Inbox Mobile (390px)
@@ -142,7 +142,7 @@ Upgrade the core workflow engine to support multi-tenant isolation, real-time co
   await page.screenshot({ path: path.join(ARTIFACT_DIR, 'audit-meeting-form-light-desktop.png') });
 
   // Switch to Dark Theme
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.locator('button.nav-link[aria-label="Settings"]').click();
   await page.locator('.theme-switch').click();
   await page.getByRole('button', { name: 'Meetings', exact: true }).click();
   await page.getByRole('button', { name: 'New meeting' }).click();
@@ -176,7 +176,7 @@ Upgrade the core workflow engine to support multi-tenant isolation, real-time co
   await page.screenshot({ path: path.join(ARTIFACT_DIR, 'audit-meeting-details-dark-desktop.png'), fullPage: true });
 
   // Meeting Details Light Desktop (1440px)
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.locator('button.nav-link[aria-label="Settings"]').click();
   await page.locator('.theme-switch').click();
   await page.getByRole('button', { name: 'Meetings', exact: true }).click();
   await page.locator('.meeting-list-row').first().click();
@@ -213,7 +213,7 @@ Upgrade the core workflow engine to support multi-tenant isolation, real-time co
   await page.screenshot({ path: path.join(ARTIFACT_DIR, 'audit-health-chart-light-desktop.png'), fullPage: true });
 
   // Switch to Dark Theme
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.locator('button.nav-link[aria-label="Settings"]').click();
   await page.locator('.theme-switch').click();
   await page.getByRole('button', { name: 'Project Health', exact: true }).click();
   if (await page.locator('.health-card').first().isVisible().catch(() => false)) {
