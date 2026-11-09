@@ -1,9 +1,9 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '../common/auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { Principal } from '../common/auth.types';
-import { ApprovePlanDto, AskDto, AssistantChatDto, PlanDto } from './ai.dto';
+import { ApprovePlanDto, AskDto, AssistantChatDto, ApplyTaskAssignmentDto, PlanDto } from './ai.dto';
 import { AiService } from './ai.service';
 
 @ApiTags('AI workspace') @ApiBearerAuth() @Controller('ai') @UseGuards(AuthGuard)
@@ -31,6 +31,21 @@ export class AiController {
   @Get('assistant/context')
   assistantContext(@CurrentUser() user: Principal, @Query('projectId') projectId?: string) {
     return this.service.getAssistantContext(user, projectId);
+  }
+
+  @ApiOperation({ summary: 'Get smart assignee recommendations for a task based on capacity, schedules, and skills' })
+  @ApiResponse({ status: 200, description: 'Top 3 grounded assignee recommendations with transparent rationales and workload concerns' })
+  @Get('tasks/:taskId/recommend-assignee')
+  recommendAssignee(@CurrentUser() user: Principal, @Param('taskId') taskId: string) {
+    return this.service.recommendTaskAssignee(user, taskId);
+  }
+
+  @ApiOperation({ summary: 'Apply an approved task assignment recommendation (human in the loop)' })
+  @ApiResponse({ status: 200, description: 'Persisted task assignment with audit record, notifications, and realtime updates' })
+  @Post('tasks/:taskId/apply-assignment')
+  @HttpCode(200)
+  applyAssignment(@CurrentUser() user: Principal, @Param('taskId') taskId: string, @Body() dto: ApplyTaskAssignmentDto) {
+    return this.service.applyTaskAssignment(user, taskId, dto.assigneeId);
   }
 }
 

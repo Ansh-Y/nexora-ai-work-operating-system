@@ -12,8 +12,13 @@ import { calculateCriticalPath } from '../projects/critical-path';
 import { ApprovePlanDto, AskDto, AssistantChatDto, PlanDto } from './ai.dto';
 import { ProjectPlannerEngine, Plan, PlanTask, PlanMilestone } from './project-planner.engine';
 import { AiAssistantEngine, AssistantChatResponse, AssistantCitation, AssistantContext } from './ai-assistant.engine';
+import {
+  AssignmentRecommendation,
+  TaskAssignmentAnalysisResult,
+  TaskAssignmentEngine,
+} from './task-assignment.engine';
 
-export { Plan, PlanTask, PlanMilestone };
+export { Plan, PlanTask, PlanMilestone, AssignmentRecommendation, TaskAssignmentAnalysisResult };
 
 @Injectable()
 export class AiService {
@@ -915,6 +920,66 @@ CRITICAL OPERATIONAL RULES:
 
     // Local deterministic fallback
     return AiAssistantEngine.generateDeterministicAnswer(message, context, dto.history);
+  }
+
+  async recommendTaskAssignee(user: Principal, taskId: string): Promise<TaskAssignmentAnalysisResult> {
+    const task = await this.prisma.task.findFirst({
+      where: { id: taskId, organizationId: user.orgId },
+      include: {
+        project: { select: { id: true, name: true } },
+        assignee: { select: { id: true, name: true, email: true } },
+      },
+    });
+    if (!task) throw new NotFoundException('Task not found in this workspace');
+
+    const memberships = await this.prisma.membership.findMany({
+      where: { organizationId: user.orgId },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+      },
+    });
+
+    const candidates = memberships.map(m => ({
+      id: m.user.id,
+      name: m.user.name,
+      email: m.user.email,
+      role: m.role,
+    }));
+
+    const workspaceTasks = await this.prisma.task.findMany({
+      where: { organizationId: user.orgId },
+      select: {
+        id: true,
+        projectId: true,
+        assigneeId: true,
+        title: true,
+        description: true,
+        status: true,
+        priority: true,
+        dueDate: true,
+        labels: true,
+      },
+    });
+
+    return TaskAssignmentEngine.analyzeAndRecommend({
+      task: {
+        id: task.id,
+        projectId: task.projectId,
+        projectName: task.project?.name,
+        title: task.title,
+        description: task.description,
+        priority: task.priority,
+        dueDate: task.dueDate,
+        labels: task.labels,
+        currentAssigneeId: task.assigneeId,
+      },
+      candidates,
+      workspaceTasks,
+    });
+  }
+
+  async applyTaskAssignment(user: Principal, taskId: string, assigneeId: string) {
+    return this.tasks.update(user, taskId, { assigneeId });
   }
 }
 

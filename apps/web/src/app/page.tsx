@@ -63,6 +63,7 @@ import GoogleWorkspaceIntegration from "./GoogleWorkspaceIntegration";
 import ProjectHealthDashboard from "./ProjectHealthDashboard";
 import CommandPalette from "./CommandPalette";
 import { AiAssistantWorkspace } from "./AiAssistantWorkspace";
+import SmartAssignmentModal from "./SmartAssignmentModal";
 
 type User = { id: string; name: string; email: string };
 type Workspace = { id: string; name: string; role: string };
@@ -190,6 +191,7 @@ export default function Home() {
   const [projectMenu, setProjectMenu] = useState(false);
   const [dependencySource, setDependencySource] = useState("");
   const [commentTask, setCommentTask] = useState<Task | null>(null);
+  const [recommendingTask, setRecommendingTask] = useState<Task | null>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [settingsTab, setSettingsTab] = useState<string>("members");
 
@@ -645,6 +647,14 @@ export default function Home() {
       }
     } catch (e) {
       handleError(e);
+    }
+  }
+
+  async function handleTaskAssigned(taskId: string, assignee: { id: string; name: string }) {
+    notify(`Assigned to ${assignee.name}`);
+    await refreshProjects(project?.id);
+    if (commentTask?.id === taskId) {
+      setCommentTask(prev => (prev ? { ...prev, assignee: { id: assignee.id, name: assignee.name } } : null));
     }
   }
 
@@ -1667,6 +1677,7 @@ export default function Home() {
                       setModal("dependency");
                     }}
                     onComment={openComments}
+                    onRecommendAssignee={setRecommendingTask}
                   />
                 ) : (
                   <div className="empty-inline">Create your first project and tasks to see work come together here.</div>
@@ -1974,6 +1985,7 @@ export default function Home() {
                                 setModal("dependency");
                               }}
                               onComment={openComments}
+                              onRecommendAssignee={setRecommendingTask}
                               onDragStart={setDraggedTask}
                             />
                           ))}
@@ -1991,6 +2003,7 @@ export default function Home() {
                       setModal("dependency");
                     }}
                     onComment={openComments}
+                    onRecommendAssignee={setRecommendingTask}
                   />
                 </section>
               ) : (
@@ -3558,13 +3571,24 @@ export default function Home() {
                 <div className="eyebrow">TASK DETAILS &amp; ACTIVITY</div>
                 <h2>{commentTask.title}</h2>
               </div>
-              <button
-                className="icon-button"
-                aria-label="Close task discussion"
-                onClick={() => setCommentTask(null)}
-              >
-                <X size={18} />
-              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <button
+                  type="button"
+                  className="button button-secondary small-button ai-assign-button"
+                  onClick={() => setRecommendingTask(commentTask)}
+                  title={`AI Recommend Assignee for ${commentTask.title}`}
+                  aria-label="AI Recommend Assignee"
+                >
+                  <Sparkles size={13} /> AI Assign
+                </button>
+                <button
+                  className="icon-button"
+                  aria-label="Close task discussion"
+                  onClick={() => setCommentTask(null)}
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             <div
@@ -3826,6 +3850,14 @@ export default function Home() {
         </div>
       )}
 
+      {recommendingTask && (
+        <SmartAssignmentModal
+          task={recommendingTask}
+          onClose={() => setRecommendingTask(null)}
+          onAssigned={handleTaskAssigned}
+        />
+      )}
+
       {toast && (
         <div className="toast">
           <span><Check size={14} /></span>
@@ -3895,11 +3927,13 @@ function TaskTable({
   onStatus,
   onDependency,
   onComment,
+  onRecommendAssignee,
 }: {
   tasks: Task[];
   onStatus: (task: Task, status: string) => void;
   onDependency: (task: Task) => void;
   onComment?: (task: Task) => void;
+  onRecommendAssignee?: (task: Task) => void;
 }) {
   return (
     <div className="task-table-wrap">
@@ -3974,6 +4008,14 @@ function TaskTable({
               <td>
                 <div className="row-actions" style={{ display: "flex", gap: "2px" }}>
                   <button
+                    className="icon-button ai-assign-button"
+                    title={`AI Recommend Assignee for ${task.title}`}
+                    aria-label={`AI Recommend Assignee for ${task.title}`}
+                    onClick={() => onRecommendAssignee?.(task)}
+                  >
+                    <Sparkles size={14} />
+                  </button>
+                  <button
                     className="icon-button"
                     title={`Comments for ${task.title}`}
                     aria-label={`Comments for ${task.title}`}
@@ -4005,12 +4047,14 @@ function TaskCard({
   onStatus,
   onDependency,
   onComment,
+  onRecommendAssignee,
   onDragStart,
 }: {
   task: Task;
   onStatus: (task: Task, status: string) => void;
   onDependency: (task: Task) => void;
   onComment?: (task: Task) => void;
+  onRecommendAssignee?: (task: Task) => void;
   onDragStart?: (task: Task) => void;
 }) {
   return (
@@ -4024,6 +4068,14 @@ function TaskCard({
           {task.status === "DONE" ? <Check size={11} /> : task.status === "BLOCKED" ? <Zap size={10} /> : <i />}
         </span>
         <div className="row-actions" style={{ display: "flex", gap: "2px" }}>
+          <button
+            className="icon-button ai-assign-button"
+            onClick={() => onRecommendAssignee?.(task)}
+            title={`AI Recommend Assignee for ${task.title}`}
+            aria-label={`AI Recommend Assignee for ${task.title}`}
+          >
+            <Sparkles size={13} />
+          </button>
           <button
             className="icon-button"
             onClick={() => onComment?.(task)}
@@ -4062,6 +4114,18 @@ function TaskCard({
         >
           <CalendarDays size={12} />
           {dueLabel(task.dueDate)}
+        </span>
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "4px",
+            fontSize: "11px",
+            color: "var(--ink-secondary)",
+          }}
+          title={task.assignee?.name || "Unassigned"}
+        >
+          <User size={11} /> {task.assignee?.name || "Unassigned"}
         </span>
         <select
           aria-label={`Change ${task.title} status`}

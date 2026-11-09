@@ -52,3 +52,8 @@ export class AssistantChatDto {
   history?: ChatMessageDto[];
 }
 
+export class ApplyTaskAssignmentDto {
+  @IsUUID()
+  assigneeId!: string;
+}
+
