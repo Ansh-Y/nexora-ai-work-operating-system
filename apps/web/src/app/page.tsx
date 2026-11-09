@@ -9,6 +9,7 @@ import {
   ArrowUpRight,
   Bell,
   Blocks,
+  Bot,
   Calendar,
   CalendarDays,
   Check,
@@ -61,6 +62,7 @@ import StorageManagement from "./StorageManagement";
 import GoogleWorkspaceIntegration from "./GoogleWorkspaceIntegration";
 import ProjectHealthDashboard from "./ProjectHealthDashboard";
 import CommandPalette from "./CommandPalette";
+import { AiAssistantWorkspace } from "./AiAssistantWorkspace";
 
 type User = { id: string; name: string; email: string };
 type Workspace = { id: string; name: string; role: string };
@@ -122,6 +124,7 @@ type Page =
   | "Project Health"
   | "Meetings"
   | "Calendar"
+  | "AI Assistant"
   | "AI command"
   | "Inbox"
   | "Activity"
@@ -1193,6 +1196,7 @@ export default function Home() {
             ["Project Health", ShieldAlert],
             ["Meetings", CalendarDays],
             ["Calendar", CalendarDays],
+            ["AI Assistant", Bot],
             ["AI command", Sparkles],
             ["Inbox", Bell],
           ] as const).map(([name, Icon]) => (
@@ -2035,6 +2039,26 @@ export default function Home() {
                 setPage("My work");
               }}
               onOpenMeetings={() => setPage("Meetings")}
+            />
+          )}
+
+          {/* 6.5. AI PROJECT ASSISTANT */}
+          {page === "AI Assistant" && (
+            <AiAssistantWorkspace
+              projects={projects}
+              activeProjectId={activeProjectId}
+              onOpenProject={id => {
+                setActiveProjectId(id);
+                setPage("My work");
+              }}
+              onOpenTask={(pId, _tId) => {
+                setActiveProjectId(pId);
+                setPage("My work");
+              }}
+              onNavigate={tab => setPage(tab as Page)}
+              notify={notify}
+              user={user}
+              workspace={workspace}
             />
           )}
 

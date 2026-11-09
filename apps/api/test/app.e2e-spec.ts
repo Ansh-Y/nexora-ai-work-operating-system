@@ -265,7 +265,7 @@ describe('Nexora core workflow (e2e)', () => {
     await vi.waitFor(async () => {
       const detail = await request(app.getHttpServer()).get(`/api/meetings/${meeting.body.id}`).set('Authorization', `Bearer ${ownerToken}`).expect(200);
       expect(detail.body.processingState).toBe('COMPLETE');
-    }, { timeout: 15_000, interval: 100 });
+    }, { timeout: 15_000, interval: 300 });
     const meetingDetail = await request(app.getHttpServer()).get(`/api/meetings/${meeting.body.id}`).set('Authorization', `Bearer ${ownerToken}`).expect(200);
     expect(meetingDetail.body.transcript).toContain('Taylor will prepare the release notes');
     expect(meetingDetail.body.segments[0].speakerLabel).toBe('speaker_1');

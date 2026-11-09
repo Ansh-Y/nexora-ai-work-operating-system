@@ -6,6 +6,7 @@ import {
   ArrowRight,
   Bell,
   Blocks,
+  Bot,
   CalendarDays,
   CheckCheck,
   GitBranch,
@@ -116,6 +117,15 @@ export default function CommandPalette({
         icon: <CalendarDays size={16} />,
         keywords: ["recordings", "transcripts", "action items"],
         action: () => { onNavigate("Meetings"); onClose(); },
+      },
+      {
+        id: "nav-ai-assistant",
+        category: "Navigation",
+        label: "AI Project Assistant (Chat)",
+        badge: "Assistant",
+        icon: <Bot size={16} />,
+        keywords: ["assistant", "chat", "ask", "q&a", "conversation", "bot", "copilot"],
+        action: () => { onNavigate("AI Assistant"); onClose(); },
       },
       {
         id: "nav-ai",
