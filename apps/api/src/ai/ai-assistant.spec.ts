@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { Priority } from '@prisma/client';
 import { AiAssistantEngine, AssistantContext } from './ai-assistant.engine';
 
 describe('AiAssistantEngine — Release 4.2.1 AI Project Assistant', () => {
   const MOCK_CONTEXT: AssistantContext = {
+    organizationId: 'ws-111',
     workspaceId: 'ws-111',
     workspaceName: 'Acme Workspace',
     project: {
@@ -11,8 +13,9 @@ describe('AiAssistantEngine — Release 4.2.1 AI Project Assistant', () => {
       description: 'Q1 flagship platform launch and market rollout.',
       status: 'IN_PROGRESS',
       priority: 'HIGH',
-      createdAt: '2026-01-01T00:00:00.000Z',
-      targetDate: '2026-03-31T00:00:00.000Z',
+      startDate: '2026-01-01T00:00:00.000Z',
+      dueDate: '2026-03-31T00:00:00.000Z',
+      owner: { id: 'u-1', name: 'Alex Morgan', email: 'alex@acme.com' },
     },
     tasks: [
       {
@@ -20,62 +23,73 @@ describe('AiAssistantEngine — Release 4.2.1 AI Project Assistant', () => {
         title: 'Design high-converting landing page',
         description: 'Create responsive Figma layouts and desktop assets.',
         status: 'COMPLETED',
-        priority: 'HIGH',
+        priority: Priority.HIGH,
+        startDate: null,
         dueDate: '2026-01-15T00:00:00.000Z',
-        assignee: { id: 'u-1', name: 'Sarah Miller', email: 'sarah@acme.com' },
+        assignee: { id: 'u-1', name: 'Sarah Miller' },
         blockedBy: [],
         blocks: [],
+        labels: [],
       },
       {
         id: 'task-2',
         title: 'PCI-DSS Compliance Certification',
         description: 'Complete security audit with external auditor.',
         status: 'IN_PROGRESS',
-        priority: 'CRITICAL',
+        priority: Priority.URGENT,
+        startDate: null,
         dueDate: '2026-01-20T00:00:00.000Z', // Overdue
-        assignee: { id: 'u-2', name: 'Alex Chen', email: 'alex@acme.com' },
+        assignee: { id: 'u-2', name: 'Alex Chen' },
         blockedBy: [],
-        blocks: [{ blockedTaskId: 'task-3', blockedTaskTitle: 'Stripe Payment Gateway Integration' }],
+        blocks: [{ id: 'task-3', title: 'Stripe Payment Gateway Integration', status: 'BLOCKED' }],
+        labels: [],
       },
       {
         id: 'task-3',
         title: 'Stripe Payment Gateway Integration',
         description: 'Connect checkout API, webhooks and refund handling.',
         status: 'BLOCKED',
-        priority: 'CRITICAL',
+        priority: Priority.URGENT,
+        startDate: null,
         dueDate: '2026-01-25T00:00:00.000Z', // Overdue
-        assignee: { id: 'u-3', name: 'Jordan Taylor', email: 'jordan@acme.com' },
-        blockedBy: [{ blockingTaskId: 'task-2', blockingTaskTitle: 'PCI-DSS Compliance Certification' }],
+        assignee: { id: 'u-3', name: 'Jordan Taylor' },
+        blockedBy: [{ id: 'task-2', title: 'PCI-DSS Compliance Certification', status: 'IN_PROGRESS' }],
         blocks: [],
+        labels: [],
       },
       {
         id: 'task-4',
         title: 'Customer Onboarding Sequence Emails',
         description: 'Set up welcome emails and engagement flows.',
         status: 'TODO',
-        priority: 'MEDIUM',
+        priority: Priority.MEDIUM,
+        startDate: null,
         dueDate: '2026-04-10T00:00:00.000Z',
-        assignee: { id: 'u-1', name: 'Sarah Miller', email: 'sarah@acme.com' },
+        assignee: { id: 'u-1', name: 'Sarah Miller' },
         blockedBy: [],
         blocks: [],
+        labels: [],
       },
     ],
     milestones: [
       {
         id: 'ms-1',
         title: 'Design Freeze & Brand Approval',
+        description: 'Sign off on UI mocks and brand assets.',
         targetDate: '2026-01-10T00:00:00.000Z',
         completedAt: '2026-01-10T12:00:00.000Z',
       },
       {
         id: 'ms-2',
         title: 'Payment Integration & Security Sign-off',
+        description: 'Stripe gateway integration and audit compliance.',
         targetDate: '2026-02-15T00:00:00.000Z',
         completedAt: null,
       },
       {
         id: 'ms-3',
         title: 'Public GA Launch',
+        description: 'General availability platform rollout.',
         targetDate: '2026-03-31T00:00:00.000Z',
         completedAt: null,
       },
@@ -84,8 +98,10 @@ describe('AiAssistantEngine — Release 4.2.1 AI Project Assistant', () => {
       {
         id: 'mtg-1',
         title: 'Weekly Executive Launch Readiness Sync',
-        date: '2026-02-01T10:00:00.000Z',
+        startsAt: '2026-02-01T10:00:00.000Z',
+        status: 'COMPLETED',
         summary: 'Discussed critical blocker on PCI compliance affecting payment gateway completion.',
+        decisions: ['Agreed to expedite auditor review'],
         actionItems: [
           'Alex to expedite external auditor review by Friday.',
           'Jordan to prepare sandbox test cards pending certification sign-off.',
@@ -93,23 +109,43 @@ describe('AiAssistantEngine — Release 4.2.1 AI Project Assistant', () => {
       },
     ],
     health: {
-      overallScore: 54,
-      status: 'AT_RISK',
-      primaryDriver: 'Overdue critical path dependencies blocking payment integration',
-      factors: [
-        { name: 'Schedule Risk', score: 45, impact: 'HIGH', explanation: '2 critical tasks are overdue.' },
-        { name: 'Dependency Risk', score: 50, impact: 'HIGH', explanation: 'Task-3 is blocked by Task-2.' },
+      score: 54,
+      classification: 'AT_RISK',
+      dataCompleteness: 100,
+      activeRisksCount: { total: 2, critical: 1, high: 1, medium: 0, low: 0 },
+      risks: [
+        {
+          id: 'risk-1',
+          riskType: 'SCHEDULE_DELAY',
+          severity: 'HIGH',
+          title: 'Schedule Risk: Overdue critical path dependencies',
+          explanation: 'Overdue critical path dependencies blocking payment integration.',
+          recommendedAction: 'Prioritize PCI-DSS Compliance Certification to unblock payment integration.',
+          affectedTaskIds: ['task-2', 'task-3'],
+        },
+        {
+          id: 'risk-2',
+          riskType: 'DEPENDENCY_BOTTLENECK',
+          severity: 'HIGH',
+          title: 'Dependency Risk',
+          explanation: 'Task-3 is blocked by Task-2.',
+          recommendedAction: 'Reallocate engineering bandwidth to overdue critical path tasks.',
+          affectedTaskIds: ['task-3'],
+        },
       ],
-      recommendations: [
-        'Prioritize PCI-DSS Compliance Certification to unblock payment integration.',
-        'Reallocate engineering bandwidth to overdue critical path tasks.',
-      ],
+      forecast: {
+        trend: 'DEGRADING',
+        estimatedCompletionDate: '2026-04-15T00:00:00.000Z',
+        daysProjectedVariance: 15,
+        reasons: ['Critical path bottleneck'],
+      },
     },
     members: [
-      { id: 'u-1', name: 'Sarah Miller', role: 'ADMIN' },
-      { id: 'u-2', name: 'Alex Chen', role: 'MEMBER' },
-      { id: 'u-3', name: 'Jordan Taylor', role: 'MEMBER' },
+      { id: 'u-1', name: 'Sarah Miller', email: 'sarah@acme.com', role: 'ADMIN', assignedTaskCount: 2 },
+      { id: 'u-2', name: 'Alex Chen', email: 'alex@acme.com', role: 'MEMBER', assignedTaskCount: 1 },
+      { id: 'u-3', name: 'Jordan Taylor', email: 'jordan@acme.com', role: 'MEMBER', assignedTaskCount: 1 },
     ],
+    searchSources: [],
   };
 
   // 1. Project Overview
