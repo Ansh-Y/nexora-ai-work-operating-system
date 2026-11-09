@@ -24,7 +24,8 @@ export class FileValidator {
     const base = raw.slice(0, raw.length - ext.length);
     const safeBase = base
       .replace(/\.{2,}/g, '_')
-      .replace(/[\\/\u0000-\u001f!@#$%^&*()+=[\]{}|;:",<>?`~]/g, '_')
+      .replace(/[\\/!@#$%^&*()+=[\]{}|;:",<>?`~]/g, '_')
+      .replace(/[\s\S]/g, (c) => (c.charCodeAt(0) < 32 ? '_' : c))
       .replace(/_{2,}/g, '_')
       .replace(/^_+|_+$/g, '') || fallbackBase;
     const combined = `${safeBase}${ext}`;

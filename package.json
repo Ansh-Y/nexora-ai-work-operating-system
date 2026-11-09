@@ -13,6 +13,7 @@
     "dev:api": "npm --workspace apps/api run start:dev",
     "dev:web": "npm --workspace apps/web run dev",
     "build": "npm --workspace apps/api run build && npm --workspace apps/web run build",
+    "lint": "npm --workspace apps/api run lint && npm --workspace apps/web run lint",
     "test": "npm --workspace apps/api test && npm --workspace apps/web run lint",
     "test:e2e": "npm --workspace apps/api run test:e2e",
     "test:browser": "npm --workspace apps/api run test:browser",

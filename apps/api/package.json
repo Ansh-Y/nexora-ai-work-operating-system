@@ -6,12 +6,14 @@
     "start:dev": "nest start --watch",
     "build": "nest build",
     "start": "node dist/main.js",
+    "lint": "eslint src/ && tsc --noEmit",
     "test": "vitest run --config ./vitest.config.mts src/**/*.spec.ts",
     "test:unit": "vitest run --config ./vitest.config.mts src/**/*.spec.ts",
     "test:e2e": "tsx test/run-e2e.ts",
     "test:browser": "tsx test/run-e2e.ts browser",
     "prisma:generate": "if [ -z \"$DATABASE_URL\" ] && [ -f ../../.env ]; then set -a; . ../../.env; set +a; fi; prisma generate",
     "prisma:migrate": "if [ -z \"$DATABASE_URL\" ] && [ -f ../../.env ]; then set -a; . ../../.env; set +a; fi; prisma migrate deploy",
+    "prisma:status": "if [ -z \"$DATABASE_URL\" ] && [ -f ../../.env ]; then set -a; . ../../.env; set +a; fi; prisma migrate status",
     "prisma:seed": "if [ -z \"$DATABASE_URL\" ] && [ -f ../../.env ]; then set -a; . ../../.env; set +a; fi; tsx prisma/seed.ts"
   },
   "dependencies": {

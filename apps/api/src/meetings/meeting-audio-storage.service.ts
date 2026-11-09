@@ -30,7 +30,10 @@ export class MeetingAudioStorageService {
     const extension = extname(file.originalname || '').toLowerCase();
     const signature = this.detect(file.buffer);
     if (!signature || !signature.extensions.some(candidate => candidate === extension)) throw new BadRequestException('The audio file type could not be verified. Upload an MP3, WAV, or M4A file.');
-    const safeName = (file.originalname || `meeting-audio${extension}`).replace(/[\\/\u0000-\u001f]/g, '_').slice(-180);
+    const safeName = (file.originalname || `meeting-audio${extension}`)
+      .replace(/[\\/]/g, '_')
+      .replace(/[\s\S]/g, (c) => (c.charCodeAt(0) < 32 ? '_' : c))
+      .slice(-180);
     return { buffer: file.buffer, fileName: safeName, mimeType: signature.mimeType, sizeBytes: file.buffer.length, sha256: createHash('sha256').update(file.buffer).digest('hex') };
   }
 
