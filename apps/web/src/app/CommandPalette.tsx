@@ -9,6 +9,7 @@ import {
   Bot,
   CalendarDays,
   CheckCheck,
+  FileText,
   GitBranch,
   LayoutDashboard,
   LogOut,
@@ -127,6 +128,15 @@ export default function CommandPalette({
         icon: <Bot size={16} />,
         keywords: ["assistant", "chat", "ask", "q&a", "conversation", "bot", "copilot"],
         action: () => { onNavigate("AI Assistant"); onClose(); },
+      },
+      {
+        id: "nav-reports",
+        category: "Navigation",
+        label: "AI Weekly Project Reports",
+        badge: "Reports",
+        icon: <FileText size={16} />,
+        keywords: ["reports", "weekly", "pdf", "executive", "intelligence", "progress", "export"],
+        action: () => { onNavigate("Reports"); onClose(); },
       },
       {
         id: "nav-automations",

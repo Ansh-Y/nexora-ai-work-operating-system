@@ -65,6 +65,7 @@ import CommandPalette from "./CommandPalette";
 import { AiAssistantWorkspace } from "./AiAssistantWorkspace";
 import SmartAssignmentModal from "./SmartAssignmentModal";
 import AutomationsWorkspace from "./AutomationsWorkspace";
+import ReportsWorkspace from "./ReportsWorkspace";
 
 type User = { id: string; name: string; email: string };
 type Workspace = { id: string; name: string; role: string };
@@ -124,6 +125,7 @@ type Page =
   | "My work"
   | "Projects"
   | "Project Health"
+  | "Reports"
   | "Meetings"
   | "Calendar"
   | "AI Assistant"
@@ -1206,6 +1208,7 @@ export default function Home() {
             ["My work", CheckCheck],
             ["Projects", Blocks],
             ["Project Health", ShieldAlert],
+            ["Reports", FileText],
             ["Meetings", CalendarDays],
             ["Calendar", CalendarDays],
             ["AI Assistant", Bot],
@@ -2081,6 +2084,18 @@ export default function Home() {
           {/* 6.6. AI WORKFLOW AUTOMATION */}
           {page === "Automations" && (
             <AutomationsWorkspace
+              projects={projects}
+              notify={notify}
+              onOpenProject={id => {
+                setActiveProjectId(id);
+                setPage("My work");
+              }}
+            />
+          )}
+
+          {/* 6.7. AI WEEKLY PROJECT REPORTS */}
+          {page === "Reports" && (
+            <ReportsWorkspace
               projects={projects}
               notify={notify}
               onOpenProject={id => {

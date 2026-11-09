@@ -12,7 +12,7 @@ import type { TranscriptSegmentInput } from './meeting-analysis';
 import { reminderRedisConnection } from '../notifications/reminder-policy';
 
 type MeetingAudioJob = { organizationId: string; meetingId: string; recordingId: string; generation: number };
-const QUEUE_NAME = 'nexora-meeting-processing';
+const getQueueName = () => process.env.MEETING_QUEUE_NAME || 'nexora-meeting-processing';
 const JOB_NAME = 'transcribe-and-analyze';
 
 @Injectable()
@@ -36,8 +36,9 @@ export class MeetingJobsService implements OnModuleInit, OnModuleDestroy {
     if (!redisUrl) { this.logger.warn('Meeting transcription is queued only when REDIS_URL is configured'); return; }
     try {
       const connection = reminderRedisConnection(redisUrl);
-      this.queue = new Queue<MeetingAudioJob>(QUEUE_NAME, { connection: { ...connection, maxRetriesPerRequest: 1, enableOfflineQueue: false } });
-      this.worker = new Worker<MeetingAudioJob>(QUEUE_NAME, job => this.process(job), { connection, concurrency: 2, maxStalledCount: 2, stalledInterval: 30_000 });
+      const queueName = getQueueName();
+      this.queue = new Queue<MeetingAudioJob>(queueName, { connection: { ...connection, maxRetriesPerRequest: 1, enableOfflineQueue: false } });
+      this.worker = new Worker<MeetingAudioJob>(queueName, job => this.process(job), { connection, concurrency: 2, maxStalledCount: 2, stalledInterval: 30_000 });
       this.queue.on('error', error => this.logger.warn(`Meeting queue connection error: ${error.message}`));
       this.worker.on('error', error => this.logger.warn(`Meeting worker connection error: ${error.message}`));
       this.worker.on('failed', (job, error) => {

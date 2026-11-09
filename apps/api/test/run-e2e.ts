@@ -36,6 +36,17 @@ async function main() {
     await adminClient.end();
   }
 
+  if (process.env.REDIS_URL) {
+    try {
+      const Redis = (await import('ioredis')).default;
+      const redisClient = new Redis(process.env.REDIS_URL, { maxRetriesPerRequest: 1 });
+      await redisClient.flushdb();
+      await redisClient.quit();
+    } catch {
+      // ignore redis connection issues
+    }
+  }
+
   const testUrl = new URL(sourceUrl);
   testUrl.pathname = `/${dbName}`;
   const storageDirectory = join(tmpdir(), dbName);
@@ -43,7 +54,7 @@ async function main() {
   const githubConfig = mode === 'api'
     ? { GITHUB_CLIENT_ID: 'nexora-e2e-client', GITHUB_CLIENT_SECRET: 'e2e-client-secret', GITHUB_CALLBACK_URL: 'https://api.nexora.test/api/integrations/github/callback', API_PUBLIC_URL: 'https://api.nexora.test' }
     : { GITHUB_CLIENT_ID: '', GITHUB_CLIENT_SECRET: '', GITHUB_CALLBACK_URL: '', API_PUBLIC_URL: '' };
-  const env = { ...process.env, DATABASE_URL: testUrl.toString(), MEETING_STORAGE_DIR: storageDirectory, STORAGE_LOCAL_DIR: storageDirectory, OPENAI_API_KEY: '', ...githubConfig, GITHUB_TOKEN_ENCRYPTION_KEY: randomBytes(32).toString('hex') };
+  const env = { ...process.env, DATABASE_URL: testUrl.toString(), MEETING_STORAGE_DIR: storageDirectory, STORAGE_LOCAL_DIR: storageDirectory, OPENAI_API_KEY: '', MEETING_QUEUE_NAME: `nexora-meeting-processing-${dbName}`, ...githubConfig, GITHUB_TOKEN_ENCRYPTION_KEY: randomBytes(32).toString('hex') };
   let status = 1;
   try {
     status = run(process.execPath, [resolve(apiDirectory, '../../node_modules/prisma/build/index.js'), 'migrate', 'deploy'], env);
@@ -57,6 +68,7 @@ async function main() {
       if (status === 0) status = run(process.execPath, [vitestBin, 'run', '--config', './vitest.config.mts', 'test/ai-assistant.e2e-spec.ts'], env);
       if (status === 0) status = run(process.execPath, [vitestBin, 'run', '--config', './vitest.config.mts', 'test/smart-assignment.e2e-spec.ts'], env);
       if (status === 0) status = run(process.execPath, [vitestBin, 'run', '--config', './vitest.config.mts', 'test/workflow-automation.e2e-spec.ts'], env);
+      if (status === 0) status = run(process.execPath, [vitestBin, 'run', '--config', './vitest.config.mts', 'test/weekly-reports.e2e-spec.ts'], env);
     }
     if (status === 0 && mode === 'browser') status = run(process.execPath, [resolve(rootDirectory, 'node_modules/typescript/bin/tsc'), '--project', 'tsconfig.browser.json'], env);
     if (status === 0 && mode === 'browser') status = run(process.execPath, [resolve(rootDirectory, 'node_modules/@playwright/test/cli.js'), 'test', '--config', resolve(rootDirectory, 'playwright.config.ts'), ...process.argv.slice(3)], env, rootDirectory);

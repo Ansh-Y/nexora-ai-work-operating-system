@@ -10,6 +10,8 @@ import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
 import { WorkflowAutomationController } from './workflow-automation.controller';
 import { WorkflowAutomationService } from './workflow-automation.service';
+import { WeeklyReportsController } from './weekly-reports.controller';
+import { WeeklyReportsService } from './weekly-reports.service';
 
 @Module({
   imports: [
@@ -21,9 +23,9 @@ import { WorkflowAutomationService } from './workflow-automation.service';
     ProjectHealthModule,
     NotificationsModule,
   ],
-  controllers: [AiController, WorkflowAutomationController],
-  providers: [AiService, WorkflowAutomationService],
-  exports: [AiService, WorkflowAutomationService],
+  controllers: [AiController, WorkflowAutomationController, WeeklyReportsController],
+  providers: [AiService, WorkflowAutomationService, WeeklyReportsService],
+  exports: [AiService, WorkflowAutomationService, WeeklyReportsService],
 })
 export class AiModule {}
 
