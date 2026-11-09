@@ -236,7 +236,17 @@ describe('WeeklyReportEngine Unit Tests', () => {
     });
   });
 
-  describe('PDF Generation', () => {
+  describe('PDF Generation and Pagination Layout', () => {
+    function getPdfPageCount(buffer: Buffer): number {
+      const content = buffer.toString('latin1');
+      const countMatch = content.match(/\/Count\s+(\d+)/);
+      if (countMatch) {
+        return parseInt(countMatch[1], 10);
+      }
+      const pageMatches = content.match(/\/Type\s*\/Page[^s]/g);
+      return pageMatches ? pageMatches.length : 1;
+    }
+
     it('successfully compiles structured report data into a binary PDF buffer', async () => {
       const report = WeeklyReportEngine.buildStructuredReport(sampleProjectData, weekAgo, mockNow);
       const pdfBuffer = await WeeklyReportPdfGenerator.generate(report);
@@ -245,6 +255,166 @@ describe('WeeklyReportEngine Unit Tests', () => {
       expect(pdfBuffer.length).toBeGreaterThan(1000);
       // Verify PDF file signature (%PDF-)
       expect(pdfBuffer.toString('utf8', 0, 5)).toBe('%PDF-');
+    });
+
+    it('renders a compact report (like Product Launch) cleanly onto exactly 1 page without orphan pages', async () => {
+      const compactProject: RawProjectData = {
+        id: 'proj-compact',
+        name: 'Product Launch',
+        description: 'Launch the next generation of the Nexora workspace.',
+        tasks: [
+          {
+            id: 't-1',
+            title: 'Complete backend API',
+            status: TaskStatus.BLOCKED,
+            priority: Priority.URGENT,
+            createdAt: new Date('2026-11-01T00:00:00Z'),
+            dueDate: new Date('2026-11-05T00:00:00Z'),
+            assigneeId: 'u-1',
+            assignee: { id: 'u-1', name: 'Alex Morgan', email: 'alex@nexora.local' },
+            blockedBy: [],
+          },
+          {
+            id: 't-2',
+            title: 'Prepare launch checklist',
+            status: TaskStatus.TODO,
+            priority: Priority.HIGH,
+            createdAt: new Date('2026-11-01T00:00:00Z'),
+            dueDate: new Date('2026-11-12T00:00:00Z'),
+            assigneeId: null,
+          },
+        ],
+        milestones: [],
+        healthSnapshot: {
+          score: 45,
+          classification: 'CRITICAL',
+          explanation: 'Critical task blocked on schedule',
+        },
+        roster: [
+          { id: 'u-1', name: 'Alex Morgan', email: 'alex@nexora.local', role: 'OWNER' },
+        ],
+      };
+
+      const report = WeeklyReportEngine.buildStructuredReport(compactProject, weekAgo, mockNow);
+      const pdfBuffer = await WeeklyReportPdfGenerator.generate(report);
+
+      expect(pdfBuffer.length).toBeGreaterThan(2000);
+      const pageCount = getPdfPageCount(pdfBuffer);
+      // Compact reports fit cleanly on Page 1 without orphaning recommendation cards
+      expect(pageCount).toBe(1);
+
+      const pdfRaw = pdfBuffer.toString('latin1');
+      expect(pdfRaw).toContain('(Weekly Report - Product Launch)');
+    });
+
+    it('renders an extensive project report onto 2 pages with continuation header and no runaway pages', async () => {
+      const extensiveProject: RawProjectData = {
+        id: 'proj-extensive',
+        name: 'Enterprise Cloud Migration Program',
+        description: 'Multi-team multi-service platform re-architecture and data warehouse modernization.',
+        tasks: [
+          {
+            id: 't-1',
+            title: 'Database connection pooling optimization',
+            status: TaskStatus.DONE,
+            priority: Priority.HIGH,
+            createdAt: new Date('2026-10-28T00:00:00Z'),
+            completedAt: new Date('2026-11-04T12:00:00Z'),
+            assigneeId: 'u-1',
+            assignee: { id: 'u-1', name: 'Alex Morgan', email: 'alex@nexora.local' },
+          },
+          {
+            id: 't-2',
+            title: 'Distributed cache cluster deployment',
+            status: TaskStatus.DONE,
+            priority: Priority.HIGH,
+            createdAt: new Date('2026-10-28T00:00:00Z'),
+            completedAt: new Date('2026-11-05T14:00:00Z'),
+            assigneeId: 'u-2',
+            assignee: { id: 'u-2', name: 'Dev Lead', email: 'lead@nexora.local' },
+          },
+          {
+            id: 't-3',
+            title: 'Kafka event streaming consumers',
+            status: TaskStatus.BLOCKED,
+            priority: Priority.URGENT,
+            createdAt: new Date('2026-11-01T00:00:00Z'),
+            dueDate: new Date('2026-11-04T00:00:00Z'),
+            assigneeId: 'u-1',
+            assignee: { id: 'u-1', name: 'Alex Morgan', email: 'alex@nexora.local' },
+            blockedBy: [
+              { blockingTask: { id: 't-4', title: 'Schema Registry SSL configuration', status: TaskStatus.IN_PROGRESS } },
+            ],
+          },
+          {
+            id: 't-4',
+            title: 'Schema Registry SSL configuration',
+            status: TaskStatus.IN_PROGRESS,
+            priority: Priority.URGENT,
+            createdAt: new Date('2026-11-01T00:00:00Z'),
+            dueDate: new Date('2026-11-05T00:00:00Z'),
+            assigneeId: 'u-2',
+            assignee: { id: 'u-2', name: 'Dev Lead', email: 'lead@nexora.local' },
+          },
+          {
+            id: 't-5',
+            title: 'Security perimeter penetration test',
+            status: TaskStatus.IN_PROGRESS,
+            priority: Priority.HIGH,
+            createdAt: new Date('2026-11-02T00:00:00Z'),
+            assigneeId: null,
+          },
+          {
+            id: 't-6',
+            title: 'Billing tier quota enforcement',
+            status: TaskStatus.TODO,
+            priority: Priority.HIGH,
+            createdAt: new Date('2026-11-02T00:00:00Z'),
+            assigneeId: null,
+          },
+        ],
+        milestones: [
+          { id: 'm-1', title: 'Security Architecture Signoff', targetDate: new Date('2026-11-15T00:00:00Z'), completedAt: null },
+          { id: 'm-2', title: 'Load Testing Validation', targetDate: new Date('2026-11-20T00:00:00Z'), completedAt: null },
+        ],
+        healthSnapshot: {
+          score: 55,
+          classification: 'AT_RISK',
+          explanation: 'Overdue infrastructure tickets and security audit pending',
+        },
+        activeRisks: [
+          { id: 'r-1', title: 'Schema registry certificate expiration', severity: 'CRITICAL', recommendedAction: 'Rotate certificates' },
+          { id: 'r-2', title: 'Multiple unassigned high priority deliverables', severity: 'HIGH', recommendedAction: 'Assign team owners' },
+        ],
+        meetings: [
+          {
+            id: 'mtg-1',
+            title: 'Weekly Migration Standup',
+            startsAt: new Date('2026-11-04T10:00:00Z'),
+            decisions: [{ id: 'd-1', title: 'Adopt mTLS for inter-service communication' }],
+            actionItems: [{ id: 'a-1', title: 'Provision cert-manager on EKS cluster', status: 'PENDING' }],
+          },
+        ],
+        roster: [
+          { id: 'u-1', name: 'Alex Morgan', email: 'alex@nexora.local', role: 'ADMIN' },
+          { id: 'u-2', name: 'Dev Lead', email: 'lead@nexora.local', role: 'MEMBER' },
+          { id: 'u-3', name: 'Security Architect', email: 'sec@nexora.local', role: 'MEMBER' },
+          { id: 'u-4', name: 'QA Specialist', email: 'qa@nexora.local', role: 'MEMBER' },
+          { id: 'u-5', name: 'Site Reliability Engineer', email: 'sre@nexora.local', role: 'MEMBER' },
+          { id: 'u-6', name: 'Product Manager', email: 'pm@nexora.local', role: 'VIEWER' },
+        ],
+      };
+
+      const report = WeeklyReportEngine.buildStructuredReport(extensiveProject, weekAgo, mockNow);
+      const pdfBuffer = await WeeklyReportPdfGenerator.generate(report);
+
+      expect(pdfBuffer.length).toBeGreaterThan(4000);
+      const pageCount = getPdfPageCount(pdfBuffer);
+      // Confirms page count is 2 (controlled continuation without runaway pages)
+      expect(pageCount).toBe(2);
+
+      const pdfRaw = pdfBuffer.toString('latin1');
+      expect(pdfRaw).toContain('(Weekly Report - Enterprise Cloud Migration Program)');
     });
   });
 });

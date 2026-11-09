@@ -356,11 +356,16 @@ export class WeeklyReportEngine {
     );
     if (overdueTasks.length > 0) {
       const topOverdue = overdueTasks[0];
+      const dueDateFmt = new Date(topOverdue.dueDate!).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
       recommendations.push({
         id: `rec-${recId++}`,
         title: `Re-evaluate Schedule for "${topOverdue.title}"`,
         category: 'RISK',
-        rationale: `Task missed scheduled due date of ${new Date(topOverdue.dueDate!).toLocaleDateString()}. Re-estimate remaining effort and reset milestone expectation.`,
+        rationale: `Task missed scheduled due date of ${dueDateFmt}. Re-estimate remaining effort and reset milestone expectation.`,
         priority: topOverdue.priority === Priority.URGENT ? 'URGENT' : 'HIGH',
         targetTaskId: topOverdue.id,
       });
@@ -368,12 +373,21 @@ export class WeeklyReportEngine {
 
     // 3. Unassigned high-priority work
     if (workload.unassignedHighPriorityCount > 0) {
+      const count = workload.unassignedHighPriorityCount;
+      const unassignedHighTasks = tasks.filter(
+        t => !t.assigneeId && t.status !== TaskStatus.DONE && t.status !== TaskStatus.CANCELLED && (t.priority === Priority.URGENT || t.priority === Priority.HIGH),
+      );
+      const topUnassigned = unassignedHighTasks[0];
+      const taskRef = topUnassigned ? ` "${topUnassigned.title}"` : '';
       recommendations.push({
         id: `rec-${recId++}`,
-        title: `Assign Owners to ${workload.unassignedHighPriorityCount} High-Priority Task${workload.unassignedHighPriorityCount > 1 ? 's' : ''}`,
+        title: `Assign Owners to ${count} High-Priority Task${count > 1 ? 's' : ''}`,
         category: 'CAPACITY',
-        rationale: `${workload.unassignedHighPriorityCount} critical or urgent work item(s) remain unassigned. Use AI Smart Assignment to balance workload.`,
+        rationale: count === 1
+          ? `1 critical or urgent work item${taskRef} remains unassigned. Use AI Smart Assignment to balance workload.`
+          : `${count} critical or urgent work items remain unassigned. Use AI Smart Assignment to balance workload.`,
         priority: 'HIGH',
+        targetTaskId: topUnassigned?.id,
       });
     }
 
@@ -381,11 +395,16 @@ export class WeeklyReportEngine {
     const approachingMilestones = (data.milestones || []).filter(m => !m.completedAt && m.targetDate);
     if (approachingMilestones.length > 0) {
       const nearest = approachingMilestones[0];
+      const targetFmt = new Date(nearest.targetDate!).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
       recommendations.push({
         id: `rec-${recId++}`,
         title: `Conduct Target Readiness Check for Milestone "${nearest.title}"`,
         category: 'ALIGNMENT',
-        rationale: `Milestone is targeted for ${new Date(nearest.targetDate!).toLocaleDateString()}. Confirm remaining deliverables with project leads.`,
+        rationale: `Milestone is targeted for ${targetFmt}. Confirm remaining deliverables with project leads.`,
         priority: 'MEDIUM',
         targetMilestoneId: nearest.id,
       });
