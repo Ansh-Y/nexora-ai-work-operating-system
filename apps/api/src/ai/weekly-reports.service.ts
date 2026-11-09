@@ -4,13 +4,15 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { OrganizationRole } from '@prisma/client';
+import { NotificationCategory, NotificationPriority, NotificationType, OrganizationRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { Principal } from '../common/auth.types';
+import { NotificationsService } from '../notifications/notifications.service';
 import { GenerateWeeklyReportDto } from './weekly-reports.dto';
 import {
   CalculatedReportMetrics,
@@ -30,6 +32,8 @@ export class WeeklyReportsService {
     private audit: AuditService,
     private config: ConfigService,
     private realtime: RealtimeGateway,
+    @Optional()
+    private notifications?: NotificationsService,
   ) {}
 
   /**
@@ -47,7 +51,7 @@ export class WeeklyReportsService {
     // Verify project exists in user workspace
     const project = await this.prisma.project.findFirst({
       where: { id: projectId, organizationId: user.orgId, archivedAt: null },
-      select: { id: true, name: true, description: true },
+      select: { id: true, name: true, description: true, ownerId: true },
     });
     if (!project) {
       throw new NotFoundException('Project not found in this workspace');
@@ -140,6 +144,32 @@ export class WeeklyReportsService {
       projectId: project.id,
       title: reportRecord.title,
     });
+
+    if (this.notifications && project.ownerId) {
+      const startStr = periodStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const endStr = periodEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      this.notifications
+        .notifyUsers(
+          user.orgId,
+          [project.ownerId],
+          NotificationType.WEEKLY_REPORT,
+          `Weekly Report Ready: ${project.name}`,
+          `Intelligence report for period ${startStr} – ${endStr} has been compiled.`,
+          `weekly_report:${reportRecord.id}`,
+          {
+            category: NotificationCategory.AI,
+            priority: NotificationPriority.MEDIUM,
+            actionUrl: `/reports?id=${reportRecord.id}`,
+            metadata: {
+              reportId: reportRecord.id,
+              projectId: project.id,
+              projectName: project.name,
+              title: reportRecord.title,
+            },
+          },
+        )
+        .catch(err => this.logger.warn(`Weekly report notification error: ${err.message}`));
+    }
 
     return reportRecord;
   }

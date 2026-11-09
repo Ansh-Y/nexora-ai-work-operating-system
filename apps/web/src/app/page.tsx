@@ -66,6 +66,7 @@ import { AiAssistantWorkspace } from "./AiAssistantWorkspace";
 import SmartAssignmentModal from "./SmartAssignmentModal";
 import AutomationsWorkspace from "./AutomationsWorkspace";
 import ReportsWorkspace from "./ReportsWorkspace";
+import NotificationsWorkspace from "./NotificationsWorkspace";
 
 type User = { id: string; name: string; email: string };
 type Workspace = { id: string; name: string; role: string };
@@ -422,12 +423,17 @@ export default function Home() {
     next.on("comment.created", (event: any) => {
       if (event.taskId === commentTask?.id) api.get(`/tasks/${event.taskId}/comments`).then(setComments).catch(() => {});
     });
-    next.on("notification.created", () =>
+    const refreshInbox = () => {
       api.get("/notifications").then((inbox: any) => {
         setNotificationItems(inbox.items ?? []);
         setUnreadNotifications(inbox.unreadCount ?? 0);
-      }).catch(() => {})
-    );
+      }).catch(() => {});
+    };
+    next.on("notification.created", refreshInbox);
+    next.on("notification.read", refreshInbox);
+    next.on("notification.read_all", refreshInbox);
+    next.on("notification.dismissed", refreshInbox);
+    next.on("notification.dismiss_all", refreshInbox);
     setSocket(next);
     return () => {
       next.disconnect();
@@ -695,6 +701,17 @@ export default function Home() {
       setTaskActivity(act);
     } catch {
       // non-blocking if github is not linked
+    }
+  }
+
+  async function openTaskById(taskId: string) {
+    try {
+      const t = (await api.get(`/tasks/${taskId}`)) as Task;
+      if (t) {
+        await openComments(t);
+      }
+    } catch {
+      setPage("My work");
     }
   }
 
@@ -2536,127 +2553,33 @@ export default function Home() {
             </>
           )}
 
-          {/* 8. INBOX */}
+          {/* 8. INBOX / SMART NOTIFICATION CENTER */}
           {page === "Inbox" && (
-            <>
-              <div className="welcome-row compact-welcome">
-                <div>
-                  <div className="eyebrow">STAY IN THE LOOP</div>
-                  <h1>Inbox</h1>
-                  <p className="page-subtitle">Personal notifications and current workspace risks.</p>
-                </div>
-                <button className="button button-secondary" onClick={() => setPage("Activity")}>
-                  <Activity size={15} /> Full activity
-                </button>
-              </div>
-
-              <section className="panel inbox-panel">
-                <div className="panel-head">
-                  <div>
-                    <h2>Notifications</h2>
-                    <span className="muted-copy">{unreadNotifications} unread &middot; latest 50</span>
-                  </div>
-                  <button className="text-button" onClick={readAllNotifications} disabled={!unreadNotifications}>
-                    Mark all read
-                  </button>
-                </div>
-                {notificationItems.length ? (
-                  <div className="inbox-list">
-                    {notificationItems.map((item: any) => {
-                      let bodyText = item.body || "";
-                      let relatedEntity = item.project?.name || project?.name || "";
-                      if (bodyText.includes(" · ")) {
-                        const parts = bodyText.split(" · ");
-                        bodyText = parts[0];
-                        if (parts[1]) relatedEntity = parts[1];
-                      }
-                      const isUnread = !item.readAt;
-
-                      return (
-                        <div
-                          className={`inbox-item notification-inbox-item inbox-card-row ${isUnread ? "unread" : "read"}`}
-                          key={item.id}
-                          onClick={() => void readNotification(item.id)}
-                          role="button"
-                          tabIndex={0}
-                          onKeyDown={e => e.key === "Enter" && void readNotification(item.id)}
-                        >
-                          <div className={`inbox-icon-box ${item.type === "RISK" || item.type === "DEADLINE" ? "amber" : "mint"}`}>
-                            {item.type === "RISK" ? <Zap size={16} /> : item.type === "DEADLINE" ? <Clock size={16} /> : <Bell size={16} />}
-                          </div>
-
-                          <div className="inbox-card-content">
-                            <div className="inbox-card-header">
-                              <b className="inbox-card-title">{item.title}</b>
-                              <div className="inbox-card-meta">
-                                {isUnread && <span className="inbox-unread-pip" title="Unread notification" />}
-                                <span className={`inbox-state-tag notification-state ${isUnread ? "unread" : "read"}`}>
-                                  {isUnread ? "Unread" : "Read"}
-                                </span>
-                                <span className="inbox-timestamp">
-                                  {new Date(item.createdAt).toLocaleString([], {
-                                    month: "short",
-                                    day: "numeric",
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}
-                                </span>
-                              </div>
-                            </div>
-
-                            <p className="inbox-card-body">{bodyText}</p>
-
-                            {relatedEntity && (
-                              <div className="inbox-entity-tag">
-                                <Folder size={11} />
-                                <span>{relatedEntity}</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="inbox-empty">
-                    <div className="inbox-empty-icon"><CheckCheck size={22} /></div>
-                    <h3>You’re all caught up</h3>
-                    <p>New assignments, comments, mentions, and risks will appear here.</p>
-                  </div>
-                )}
-              </section>
-
-              {blockedCount + overdueCount > 0 && (
-                <section className="panel attention-panel" style={{ marginTop: "20px" }}>
-                  <div className="panel-head">
-                    <div>
-                      <div className="eyebrow"><AlertTriangle size={11} /> CRITICAL PATH SIGNALS</div>
-                      <h2>Project attention</h2>
-                    </div>
-                    <span className="muted-copy">{project?.name || "Active workspace project"}</span>
-                  </div>
-                  <div className="attention-card-body">
-                    <div className="attention-severity-badge">
-                      <AlertTriangle size={14} />
-                      <span>HIGH ATTENTION</span>
-                    </div>
-                    <div className="attention-details">
-                      <b className="attention-headline">
-                        {blockedCount + overdueCount}{" "}
-                        {blockedCount + overdueCount === 1 ? "task requiring" : "tasks requiring"} immediate review
-                      </b>
-                      <p className="attention-text">
-                        {blockedCount} blocked and {overdueCount} overdue tasks are affecting downstream project momentum.
-                        Review blocker chains to adjust dates or reassign dependencies.
-                      </p>
-                    </div>
-                    <button className="button button-primary attention-action-btn" onClick={() => setPage("AI command")}>
-                      Review risk <ArrowRight size={14} />
-                    </button>
-                  </div>
-                </section>
-              )}
-            </>
+            <NotificationsWorkspace
+              onNavigate={(targetPage, context) => {
+                if (targetPage === "Projects" && context?.projectId) {
+                  setActiveProjectId(context.projectId);
+                  setPage("Projects");
+                } else if (targetPage === "Health" || targetPage === "Project Health") {
+                  if (context?.projectId) setActiveProjectId(context.projectId);
+                  setPage("Project Health");
+                } else if (targetPage === "Reports") {
+                  setPage("Reports");
+                } else if (targetPage === "Automations") {
+                  setPage("Automations");
+                } else if (targetPage === "Tasks") {
+                  setPage("My work");
+                } else if (targetPage === "Meetings") {
+                  setPage("Meetings");
+                } else {
+                  setPage(targetPage as any);
+                }
+              }}
+              onOpenTask={taskId => {
+                void openTaskById(taskId);
+              }}
+              notify={notify}
+            />
           )}
 
           {/* 9. ACTIVITY AUDIT TRAIL */}

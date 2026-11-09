@@ -7,7 +7,7 @@ import {
   NotFoundException,
   Optional,
 } from '@nestjs/common';
-import { OrganizationRole, TaskStatus, WorkflowTriggerType } from '@prisma/client';
+import { NotificationCategory, NotificationPriority, NotificationType, OrganizationRole, TaskStatus, WorkflowTriggerType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { Principal } from '../common/auth.types';
@@ -43,7 +43,22 @@ export class TasksService {
     if (startDate && dueDate && startDate > dueDate) throw new BadRequestException('Task start date must be on or before its due date');
     const task = await this.prisma.task.create({ data: { organizationId: user.orgId, projectId, title: dto.title.trim(), description: dto.description ?? '', priority: dto.priority, status: dto.status, startDate: startDate ?? undefined, dueDate: dueDate ?? undefined, assigneeId: dto.assigneeId, labels: dto.labels ?? [] }, include: { assignee: { select: { id: true, name: true } } } });
     await this.audit.append({ organizationId: user.orgId, actorType: 'USER', actorId: user.sub, action: 'task.created', targetType: 'task', targetId: task.id, metadata: { projectId, title: task.title } });
-    if (task.assigneeId && task.assigneeId !== user.sub) await this.notifications.notifyUsers(user.orgId, [task.assigneeId], 'ASSIGNMENT', 'A task was assigned to you', task.title, `assignment:${task.id}:${task.updatedAt.toISOString()}`);
+    if (task.assigneeId && task.assigneeId !== user.sub) {
+      await this.notifications.notifyUsers(
+        user.orgId,
+        [task.assigneeId],
+        NotificationType.ASSIGNMENT,
+        'A task was assigned to you',
+        task.title,
+        `assignment:${task.id}:${task.updatedAt.toISOString()}`,
+        {
+          category: NotificationCategory.TASK,
+          priority: NotificationPriority.HIGH,
+          actionUrl: `/tasks?id=${task.id}`,
+          metadata: { taskId: task.id, projectId },
+        },
+      );
+    }
     this.changed(user.orgId, projectId, task.id, 'created');
     if (this.automation) {
       this.automation
@@ -79,10 +94,60 @@ export class TasksService {
     const changed = Object.keys(dto);
     const downstream = await this.downstream(user.orgId, id);
     await this.audit.append({ organizationId: user.orgId, actorType: 'USER', actorId: user.sub, action: 'task.updated', targetType: 'task', targetId: id, metadata: { changed, downstreamImpact: (dto.status || dto.dueDate || dto.startDate) ? downstream.map(t => t.id) : [] } });
-    if (dto.assigneeId && dto.assigneeId !== current.assigneeId && dto.assigneeId !== user.sub) await this.notifications.notifyUsers(user.orgId, [dto.assigneeId], 'ASSIGNMENT', 'A task was assigned to you', task.title, `assignment:${task.id}:${task.updatedAt.toISOString()}`);
+    if (dto.assigneeId && dto.assigneeId !== current.assigneeId && dto.assigneeId !== user.sub) {
+      await this.notifications.notifyUsers(
+        user.orgId,
+        [dto.assigneeId],
+        NotificationType.ASSIGNMENT,
+        'A task was assigned to you',
+        task.title,
+        `assignment:${task.id}:${task.updatedAt.toISOString()}`,
+        {
+          category: NotificationCategory.TASK,
+          priority: NotificationPriority.HIGH,
+          actionUrl: `/tasks?id=${task.id}`,
+          metadata: { taskId: task.id, projectId: task.projectId },
+        },
+      );
+    }
     if (dto.status === TaskStatus.BLOCKED && current.status !== TaskStatus.BLOCKED) {
       const affectedAssignees = await this.prisma.task.findMany({ where: { organizationId: user.orgId, id: { in: downstream.map(t => t.id) }, assigneeId: { not: null } }, select: { assigneeId: true } });
-      await this.notifications.notifyUsers(user.orgId, affectedAssignees.map(row => row.assigneeId!).filter(id => id !== user.sub), 'RISK', 'A dependency is blocked', `${task.title} may affect downstream work.`, `blocker:${task.id}:${task.updatedAt.toISOString()}`);
+      await this.notifications.notifyUsers(
+        user.orgId,
+        affectedAssignees.map(row => row.assigneeId!).filter(id => id !== user.sub),
+        NotificationType.RISK,
+        'A dependency is blocked',
+        `${task.title} may affect downstream work.`,
+        `blocker:${task.id}:${task.updatedAt.toISOString()}`,
+        {
+          category: NotificationCategory.TASK,
+          priority: task.priority === 'URGENT' ? NotificationPriority.CRITICAL : NotificationPriority.HIGH,
+          actionUrl: `/tasks?id=${task.id}`,
+          metadata: { taskId: task.id, projectId: task.projectId, blockedTaskId: task.id },
+        },
+      );
+    }
+    if (dto.status === TaskStatus.DONE && current.status !== TaskStatus.DONE) {
+      const project = await this.prisma.project.findUnique({
+        where: { id: task.projectId },
+        select: { ownerId: true },
+      });
+      if (project && project.ownerId !== user.sub) {
+        await this.notifications.notifyUsers(
+          user.orgId,
+          [project.ownerId],
+          NotificationType.TASK_COMPLETED,
+          `Task Completed: ${task.title}`,
+          `Task was marked completed by ${user.email || 'a team member'}.`,
+          `task_completed:${task.id}:${task.updatedAt.toISOString()}`,
+          {
+            category: NotificationCategory.TASK,
+            priority: NotificationPriority.LOW,
+            actionUrl: `/tasks?id=${task.id}`,
+            metadata: { taskId: task.id, projectId: task.projectId },
+          },
+        );
+      }
     }
     this.changed(user.orgId, task.projectId, task.id, 'updated');
     if (this.automation) {
@@ -177,11 +242,39 @@ export class TasksService {
     const recipients = new Set<string>();
     const taskAssignee = await this.prisma.task.findFirst({ where: { id: taskId, organizationId: user.orgId }, select: { assigneeId: true } });
     if (taskAssignee?.assigneeId && taskAssignee.assigneeId !== user.sub) recipients.add(taskAssignee.assigneeId);
-    if (recipients.size) await this.notifications.notifyUsers(user.orgId, [...recipients], 'COMMENT', 'New comment on your task', task.title, `comment:${comment.id}`);
+    if (recipients.size) {
+      await this.notifications.notifyUsers(
+        user.orgId,
+        [...recipients],
+        NotificationType.COMMENT,
+        'New comment on your task',
+        task.title,
+        `comment:${comment.id}`,
+        {
+          category: NotificationCategory.TEAM,
+          priority: NotificationPriority.MEDIUM,
+          actionUrl: `/tasks?id=${task.id}`,
+          metadata: { taskId: task.id, commentId: comment.id },
+        },
+      );
+    }
     const mentionedEmails = [...new Set([...dto.body.matchAll(/@([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/gi)].map(match => match[1].toLowerCase()))];
     if (mentionedEmails.length) {
       const mentioned = await this.prisma.membership.findMany({ where: { organizationId: user.orgId, user: { email: { in: mentionedEmails } } }, select: { userId: true } });
-      await this.notifications.notifyUsers(user.orgId, mentioned.map(member => member.userId).filter(id => id !== user.sub), 'MENTION', 'You were mentioned in a task comment', task.title, `mention:${comment.id}`);
+      await this.notifications.notifyUsers(
+        user.orgId,
+        mentioned.map(member => member.userId).filter(id => id !== user.sub),
+        NotificationType.MENTION,
+        'You were mentioned in a task comment',
+        task.title,
+        `mention:${comment.id}`,
+        {
+          category: NotificationCategory.TEAM,
+          priority: NotificationPriority.HIGH,
+          actionUrl: `/tasks?id=${task.id}`,
+          metadata: { taskId: task.id, commentId: comment.id },
+        },
+      );
     }
     this.realtime.broadcast(user.orgId, 'comment.created', { projectId: task.projectId, taskId, commentId: comment.id });
     return comment;

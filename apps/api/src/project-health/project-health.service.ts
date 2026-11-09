@@ -7,9 +7,11 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { OrganizationRole, Prisma } from '@prisma/client';
+import { NotificationCategory, NotificationPriority, NotificationType, OrganizationRole, Prisma } from '@prisma/client';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
@@ -47,6 +49,8 @@ export class ProjectHealthService {
     private config: ConfigService,
     @Inject(forwardRef(() => ProjectHealthQueueService))
     private queueService: ProjectHealthQueueService,
+    @Optional()
+    private notifications?: NotificationsService,
   ) {
     this.scoringEngine = new ProjectHealthScoringEngine(DEFAULT_HEALTH_CONFIG);
   }
@@ -688,6 +692,142 @@ export class ProjectHealthService {
               createdAt: now,
             },
           });
+        }
+
+        // Dispatch smart notifications on health state changes or new critical risks
+        if (this.notifications && project.ownerId) {
+          const nowYMD = now.toISOString().slice(0, 10);
+          const healthRecipients = [project.ownerId];
+
+          if (lastSnap) {
+            const scoreDelta =
+              result.score !== null && lastSnap.score !== null ? result.score - lastSnap.score : 0;
+
+            // 1. Project became CRITICAL
+            if (result.classification === 'CRITICAL' && lastSnap.classification !== 'CRITICAL') {
+              this.notifications
+                .notifyUsers(
+                  organizationId,
+                  healthRecipients,
+                  NotificationType.PROJECT_HEALTH,
+                  `Critical Health Alert: ${project.name}`,
+                  `Project health dropped to CRITICAL (${result.score ?? 0}/100). ${result.explanation || 'Immediate intervention recommended.'}`,
+                  `project_health_critical:${project.id}:${nowYMD}`,
+                  {
+                    category: NotificationCategory.PROJECT,
+                    priority: NotificationPriority.CRITICAL,
+                    actionUrl: `/health?projectId=${project.id}`,
+                    metadata: {
+                      projectId: project.id,
+                      score: result.score,
+                      previousScore: lastSnap.score,
+                      classification: result.classification,
+                    },
+                  },
+                )
+                .catch(err => this.logger.warn(`Health notification error: ${err.message}`));
+            }
+            // 2. Project became AT_RISK
+            else if (result.classification === 'AT_RISK' && lastSnap.classification === 'HEALTHY') {
+              this.notifications
+                .notifyUsers(
+                  organizationId,
+                  healthRecipients,
+                  NotificationType.PROJECT_HEALTH,
+                  `Project At Risk: ${project.name}`,
+                  `Project health is evaluated AT RISK (${result.score ?? 0}/100).`,
+                  `project_health_at_risk:${project.id}:${nowYMD}`,
+                  {
+                    category: NotificationCategory.PROJECT,
+                    priority: NotificationPriority.HIGH,
+                    actionUrl: `/health?projectId=${project.id}`,
+                    metadata: {
+                      projectId: project.id,
+                      score: result.score,
+                      previousScore: lastSnap.score,
+                      classification: result.classification,
+                    },
+                  },
+                )
+                .catch(err => this.logger.warn(`Health notification error: ${err.message}`));
+            }
+            // 3. Project recovered to HEALTHY
+            else if (result.classification === 'HEALTHY' && lastSnap.classification !== 'HEALTHY') {
+              this.notifications
+                .notifyUsers(
+                  organizationId,
+                  healthRecipients,
+                  NotificationType.PROJECT_HEALTH,
+                  `Project Healthy Again: ${project.name}`,
+                  `Project has recovered to HEALTHY (${result.score ?? 100}/100).`,
+                  `project_health_recovered:${project.id}:${nowYMD}`,
+                  {
+                    category: NotificationCategory.PROJECT,
+                    priority: NotificationPriority.LOW,
+                    actionUrl: `/health?projectId=${project.id}`,
+                    metadata: {
+                      projectId: project.id,
+                      score: result.score,
+                      previousScore: lastSnap.score,
+                      classification: result.classification,
+                    },
+                  },
+                )
+                .catch(err => this.logger.warn(`Health notification error: ${err.message}`));
+            }
+            // 4. Significant score drop (>= 10 points) without classification change
+            else if (scoreDelta <= -10) {
+              this.notifications
+                .notifyUsers(
+                  organizationId,
+                  healthRecipients,
+                  NotificationType.PROJECT_HEALTH,
+                  `Project Health Score Declined: ${project.name}`,
+                  `Health score decreased from ${lastSnap.score} to ${result.score} (${scoreDelta} pts).`,
+                  `project_health_drop:${project.id}:${result.score}:${nowYMD}`,
+                  {
+                    category: NotificationCategory.PROJECT,
+                    priority: NotificationPriority.HIGH,
+                    actionUrl: `/health?projectId=${project.id}`,
+                    metadata: {
+                      projectId: project.id,
+                      score: result.score,
+                      previousScore: lastSnap.score,
+                      scoreDelta,
+                    },
+                  },
+                )
+                .catch(err => this.logger.warn(`Health notification error: ${err.message}`));
+            }
+          }
+
+          // 5. New Critical / High Project Risks Detected
+          for (const detected of result.risks) {
+            const isNew = !existingRisks.some(r => r.fingerprint === detected.fingerprint && r.status === 'ACTIVE');
+            if (isNew && (detected.severity === 'CRITICAL' || detected.severity === 'HIGH')) {
+              const isCrit = detected.severity === 'CRITICAL';
+              this.notifications
+                .notifyUsers(
+                  organizationId,
+                  healthRecipients,
+                  NotificationType.RISK,
+                  isCrit ? `Critical Risk Detected: ${detected.title}` : `New Risk Detected: ${detected.title}`,
+                  `${project.name}: ${detected.explanation || detected.recommendedAction || 'Action required.'}`,
+                  `risk_detected:${detected.fingerprint}:${nowYMD}`,
+                  {
+                    category: NotificationCategory.PROJECT,
+                    priority: isCrit ? NotificationPriority.CRITICAL : NotificationPriority.HIGH,
+                    actionUrl: `/health?projectId=${project.id}`,
+                    metadata: {
+                      projectId: project.id,
+                      riskFingerprint: detected.fingerprint,
+                      severity: detected.severity,
+                    },
+                  },
+                )
+                .catch(err => this.logger.warn(`Risk notification error: ${err.message}`));
+            }
+          }
         }
 
         return result;

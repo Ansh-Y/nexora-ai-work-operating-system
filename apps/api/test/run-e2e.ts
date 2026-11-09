@@ -69,6 +69,7 @@ async function main() {
       if (status === 0) status = run(process.execPath, [vitestBin, 'run', '--config', './vitest.config.mts', 'test/smart-assignment.e2e-spec.ts'], env);
       if (status === 0) status = run(process.execPath, [vitestBin, 'run', '--config', './vitest.config.mts', 'test/workflow-automation.e2e-spec.ts'], env);
       if (status === 0) status = run(process.execPath, [vitestBin, 'run', '--config', './vitest.config.mts', 'test/weekly-reports.e2e-spec.ts'], env);
+      if (status === 0) status = run(process.execPath, [vitestBin, 'run', '--config', './vitest.config.mts', 'test/smart-notifications.e2e-spec.ts'], env);
     }
     if (status === 0 && mode === 'browser') status = run(process.execPath, [resolve(rootDirectory, 'node_modules/typescript/bin/tsc'), '--project', 'tsconfig.browser.json'], env);
     if (status === 0 && mode === 'browser') status = run(process.execPath, [resolve(rootDirectory, 'node_modules/@playwright/test/cli.js'), 'test', '--config', resolve(rootDirectory, 'playwright.config.ts'), ...process.argv.slice(3)], env, rootDirectory);

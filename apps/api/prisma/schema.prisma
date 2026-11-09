@@ -130,6 +130,26 @@ enum NotificationType {
   DEADLINE
   RISK
   MILESTONE
+  PROJECT_HEALTH
+  WORKFLOW_APPROVAL
+  WORKFLOW_EXECUTION
+  WEEKLY_REPORT
+  AI_INSIGHT
+  TASK_COMPLETED
+}
+
+enum NotificationCategory {
+  PROJECT
+  TASK
+  AI
+  TEAM
+}
+
+enum NotificationPriority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
 }
 
 enum MeetingStatus {
@@ -192,6 +212,7 @@ model User {
   googleOAuthStates         GoogleOAuthState[]
   dismissedRisks            ProjectRisk[]        @relation("RiskDismissedBy")
   createdWeeklyReports      ProjectWeeklyReport[] @relation("ReportCreator")
+  notificationPreferences   NotificationPreference[]
 }
 
 model Organization {
@@ -238,6 +259,7 @@ model Organization {
   projectHealthSnapshots ProjectHealthSnapshot[]
   projectRisks           ProjectRisk[]
   projectWeeklyReports   ProjectWeeklyReport[]
+  notificationPreferences NotificationPreference[]
 }
 
 model RefreshSession {
@@ -584,19 +606,55 @@ model SearchChunk {
 }
 
 model Notification {
-  id             String           @id @default(uuid()) @db.Uuid
-  organizationId String           @db.Uuid
-  userId         String           @db.Uuid
+  id             String                @id @default(uuid()) @db.Uuid
+  organizationId String                @db.Uuid
+  userId         String                @db.Uuid
   type           NotificationType
+  category       NotificationCategory  @default(TASK)
+  priority       NotificationPriority  @default(MEDIUM)
   title          String
   body           String
+  actionUrl      String?
+  metadata       Json?
   readAt         DateTime?
-  dedupeKey      String?          @unique
-  createdAt      DateTime         @default(now())
-  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dismissedAt    DateTime?
+  dedupeKey      String?               @unique
+  createdAt      DateTime              @default(now())
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, userId, readAt])
+  @@index([organizationId, userId, category])
+  @@index([organizationId, userId, priority])
+  @@index([organizationId, userId, dismissedAt])
+}
+
+model NotificationPreference {
+  id                        String       @id @default(uuid()) @db.Uuid
+  organizationId            String       @db.Uuid
+  userId                    String       @db.Uuid
+  projectAlerts             Boolean      @default(true)
+  taskAlerts                Boolean      @default(true)
+  aiAlerts                  Boolean      @default(true)
+  teamAlerts                Boolean      @default(true)
+  lowPriorityAlerts         Boolean      @default(true)
+  projectHealthAlerts       Boolean      @default(true)
+  projectRiskAlerts         Boolean      @default(true)
+  taskAssignmentAlerts      Boolean      @default(true)
+  taskStatusAlerts          Boolean      @default(true)
+  taskDeadlineAlerts        Boolean      @default(true)
+  aiProposalAlerts          Boolean      @default(true)
+  weeklyReportAlerts        Boolean      @default(true)
+  teamCommentAlerts         Boolean      @default(true)
+  deadlineReminderLeadHours Int          @default(24)
+  inAppAlerts               Boolean      @default(true)
+  createdAt                 DateTime     @default(now())
+  updatedAt                 DateTime     @updatedAt
+  organization              Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user                      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([organizationId, userId])
 }
 
 model AiProposal {

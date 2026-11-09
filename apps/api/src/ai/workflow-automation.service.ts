@@ -8,6 +8,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  NotificationCategory,
+  NotificationPriority,
   NotificationType,
   OrganizationRole,
   Priority,
@@ -477,10 +479,16 @@ export class WorkflowAutomationService {
           await this.notifications.notifyUsers(
             organizationId,
             [recipient],
-            NotificationType.RISK,
+            NotificationType.WORKFLOW_APPROVAL,
             'Automation Action Awaiting Review',
             `${proposal.title} — ${rule.name}`,
             `auto_run:${run.id}`,
+            {
+              category: NotificationCategory.AI,
+              priority: NotificationPriority.HIGH,
+              actionUrl: `/automations`,
+              metadata: { runId: run.id, ruleId: rule.id },
+            },
           );
         }
         this.realtime.broadcast(organizationId, 'automation.run_created', { runId: run.id });
@@ -828,10 +836,16 @@ export class WorkflowAutomationService {
           await this.notifications.notifyUsers(
             organizationId,
             [recipient],
-            NotificationType.RISK,
+            NotificationType.WORKFLOW_EXECUTION,
             payload.title || 'Automation Alert',
             payload.body || 'Review required for project event',
             `notice:${run.id}:${Date.now()}`,
+            {
+              category: NotificationCategory.AI,
+              priority: NotificationPriority.MEDIUM,
+              actionUrl: `/automations`,
+              metadata: { runId: run.id, ruleId: run.ruleId },
+            },
           );
           return { notifiedUser: recipient, title: payload.title };
         }
@@ -848,10 +862,16 @@ export class WorkflowAutomationService {
             await this.notifications.notifyUsers(
               organizationId,
               [project.ownerId],
-              NotificationType.RISK,
+              NotificationType.PROJECT_HEALTH,
               payload.title || `Health Diagnostic: ${project.name}`,
               payload.summary || 'Health evaluation complete.',
               `health_summary:${run.id}`,
+              {
+                category: NotificationCategory.PROJECT,
+                priority: NotificationPriority.MEDIUM,
+                actionUrl: `/health?projectId=${projectId}`,
+                metadata: { projectId, runId: run.id },
+              },
             );
           }
           return { summaryGenerated: true, projectId };
