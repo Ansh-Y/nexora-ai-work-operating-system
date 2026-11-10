@@ -17,6 +17,7 @@
     "prisma:seed": "if [ -z \"$DATABASE_URL\" ] && [ -f ../../.env ]; then set -a; . ../../.env; set +a; fi; tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@nestjs/cli": "12.0.12",
     "@nestjs/common": "12.4.0",
     "@nestjs/config": "12.1.1",
     "@nestjs/core": "12.4.0",
@@ -39,10 +40,10 @@
     "pg": "8.23.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "typescript": "6.0.2"
   },
   "devDependencies": {
-    "@nestjs/cli": "12.0.12",
     "@nestjs/schematics": "12.0.13",
     "@nestjs/testing": "12.4.0",
     "@types/express": "^5.0.0",
@@ -52,7 +53,6 @@
     "prisma": "7.10.1",
     "supertest": "^7.0.0",
     "tsx": "^4.19.2",
-    "typescript": "6.0.2",
     "vitest": "^4.1.12"
   }
 }
