@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+import { AppController } from './app.controller';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { OrganizationsModule } from './organizations/organizations.module';
@@ -24,6 +25,7 @@ import { ProjectHealthModule } from './project-health/project-health.module';
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 120 }]),
     PrismaModule, AuditModule, AuthModule, OrganizationsModule, ProjectsModule, TasksModule, AiModule, SearchModule, NotificationsModule, MeetingsModule, CalendarModule, GitHubModule, StorageModule, GoogleModule, ProjectHealthModule,
   ],
+  controllers: [AppController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

@@ -415,7 +415,7 @@ export default function Home() {
   const activeUserId = user?.id;
   useEffect(() => {
     if (!token || !workspace || !activeUserId) return;
-    const next = io(API_URL.replace(/\/api$/, ""), { auth: { token }, transports: ["websocket"] });
+    const next = io(API_URL.replace(/\/api$/, ""), { auth: { token }, transports: ["websocket", "polling"] });
     next.on("project.updated", (event: any) => {
       if (event.projectId === activeProjectId) api.get(`/projects/${event.projectId}`).then(setProject).catch(() => {});
       api.get("/projects").then(setProjects).catch(() => {});

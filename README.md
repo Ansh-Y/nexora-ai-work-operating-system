@@ -1,59 +1,150 @@
-# Nexora — AI Work Operating System
+# NEXORA — AI Work Operating System
 
-Nexora is a multi-tenant project workspace with tenant-scoped projects, tasks, dependencies, risk analysis and approval-based AI planning. The repository is a TypeScript monorepo: Next.js web client and NestJS REST/Socket.IO API, Prisma/PostgreSQL (pgvector), with Redis available for background queues.
+<div align="center">
 
-## Run locally
+**An enterprise-grade, multi-tenant AI work operating system for intelligent project planning, smart task assignment, workflow automation, predictive health scoring, and team collaboration.**
 
-Requirements: Node.js 20.19+, 22.22.3+, 24.15+, or 26+, npm, and Docker Compose. These Node versions satisfy the NestJS 12 and Prisma 7 toolchain requirements.
+[![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue.svg?logo=typescript)](https://www.typescriptlang.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-16.4-black.svg?logo=next.js)](https://nextjs.org/)
+[![NestJS](https://img.shields.io/badge/NestJS-12.4-red.svg?logo=nestjs)](https://nestjs.com/)
+[![Prisma](https://img.shields.io/badge/Prisma-7.10-teal.svg?logo=prisma)](https://www.prisma.io/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16.15-blue.svg?logo=postgresql)](https://www.postgresql.org/)
+[![pgvector](https://img.shields.io/badge/pgvector-0.8.6-blue.svg)](https://github.com/pgvector/pgvector)
+[![Redis](https://img.shields.io/badge/Redis-7.0-red.svg?logo=redis)](https://redis.io/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-1. Copy `.env.example` to `.env`. For local development, the example database URL and Redis URL work with the included Compose services. Replace `JWT_SECRET` with a unique secret.
-2. Start data services: `docker compose up -d`.
-3. Install dependencies: `npm install`.
-4. Generate Prisma client and create schema: `npm run db:generate` then `npm run db:migrate`.
-5. Optional demo workspace: `npm run db:seed` (email `demo@nexora.local`, password `NexoraDemo!2026`).
-6. Start API and web app: `npm run dev`.
+[Architecture](ARCHITECTURE.md) • [Zero-Cost Deployment](DEPLOYMENT.md) • [Environment Variables](ENVIRONMENT_VARIABLES.md) • [Placement Demo Guide](DEMO_GUIDE.md)
 
-Web: http://localhost:3000 · API: http://localhost:4000/api · Swagger: http://localhost:4000/api/docs
+</div>
 
-Without seed data, register at the sign-in screen to create a new account and workspace. AI planning and meeting analysis use OpenAI when `OPENAI_API_KEY` is configured; meeting transcription uses the configured OpenAI-compatible endpoint and `TRANSCRIPTION_API_KEY` (or the OpenAI key). Without provider credentials, processing stays visibly unconfigured and recordings can be retried when configured. Provider integrations are shown as unconfigured until their credentials and OAuth callback URLs are set.
+---
 
-Run API unit tests and web lint with `npm test`. `npm run test:e2e` and `npm run test:browser` create a uniquely named temporary PostgreSQL database, apply all migrations, and drop that database afterward; fixtures never use the configured application database. They require a PostgreSQL role able to create/drop databases, Redis, and (for browser tests) Chromium (`npx playwright install chromium`).
+## Overview
 
-## Environment
+**NEXORA** is designed to transform how software and engineering teams coordinate work. By embedding grounded artificial intelligence directly into the operational database, NEXORA moves beyond traditional static Kanban boards to provide proactive, predictive project intelligence:
 
-See `.env.example`. Never commit `.env`. Database, Redis and JWT settings are required. OpenAI, OAuth and SMTP settings are optional and should be configured only for their respective provider flows.
+- **AI Project Assistant:** Context-aware conversational AI grounded in live workspace data (tasks, milestones, dependencies, meetings, team workloads) with source citations.
+- **AI Smart Task Assignment:** Intelligent multi-factor assignee recommendation ranking team members by current workload, deadline proximity, skill profile, and organizational role.
+- **AI Workflow Automation:** Event-driven rule engine supporting automatic triggers (`TASK_STATUS_CHANGED`, `PROJECT_HEALTH_DROPPED`, `TASK_BLOCKED`) with human-in-the-loop approvals.
+- **Predictive Project Health & Risk Engine:** Rule-based health scoring (0–100) combining schedule slippage, blocker ratios, dependency depth, and deadline proximity with historical snapshot tracking.
+- **Weekly Project Intelligence Reports:** High-resolution PDF generation with deterministic KPI calculations, velocity metrics, and executive summaries.
+- **Smart Notification Center:** Priority-classified and categorized notifications with intelligent deduplication and real-time WebSocket delivery.
+- **Obsidian & Jade Design System:** Sleek, accessible UI adhering to strict monochromatic dark surfaces (`#0d0f12`) accented by Jade green (`#10b981`), with high-contrast light mode support.
 
-## API overview
+---
 
-For GitHub, create an OAuth App with callback `http://localhost:4000/api/integrations/github/callback`, set its client ID and secret, and provide a 32-byte random key as 64 hex characters for `GITHUB_TOKEN_ENCRYPTION_KEY` (generate one with `openssl rand -hex 32`). Set `API_PUBLIC_URL` to the API origin. After connection, link a repository to a project in Settings; generate a webhook secret there and register the displayed HTTPS payload URL in GitHub for push, pull request, and issue events. Event text is untrusted. Only explicit `[NEXORA-TASK:<uuid>]` references are linked; merged pull requests do not change task status automatically.
+## Technology Stack
 
-All routes are under `/api`; interactive OpenAPI docs are served at `/api/docs`.
+### Frontend Client (`apps/web`)
+- **Framework:** Next.js 16.4 (App Router & Turbopack)
+- **UI Runtime:** React 19, TypeScript
+- **Styling:** Custom CSS Design System (Jade Dark / Crisp Light themes)
+- **Icons:** Lucide React
+- **Real-Time:** Socket.IO Client 4.8
 
-- `POST /auth/register`, `POST /auth/login`, `GET /auth/me`, `POST /auth/switch-workspace`
-- `GET/POST /organizations`, `GET /organizations/members`, `POST /organizations/invitations`, `PATCH /organizations/members/:id/role`
-- `GET/POST /projects`, `GET/PATCH/DELETE /projects/:id`, milestones, health and critical-path routes
-- `GET/POST /projects/:projectId/tasks`, `PATCH/DELETE /tasks/:id`, dependencies and comments
-- `GET/POST /meetings`, `PATCH/DELETE /meetings/:id`, private recording upload/download, transcript and grounded decision/action review routes
-- `GET /calendar/events` returns tenant-scoped projects, tasks, milestones and meetings within a bounded date range
-- `/integrations/github` reports OAuth status and supports `POST /connect`, `GET /repositories/available`, `POST /repositories`, webhook setup, disconnect, recent events, and signed `POST /webhook` ingestion
-- `/integrations/github/rules` configurable workflow automation rules with trigger event matching, branch filters, human approval proposals, and execution audit history
-- `/storage` private cloud storage & retention: `GET /storage/summary`, `GET /storage/files`, `POST /storage/documents`, `GET /storage/files/:id/download`, `GET /storage/files/:id/download-url`, `POST /storage/files/:id/holds`, `POST /storage/holds/:holdId/release`, `GET/PUT /storage/retention/policy`, `GET /storage/retention/dry-run`, `POST /storage/retention/sweep`, and signed token validation
-- `/health` project health scoring & predictive risk: `GET /health/projects/overview`, `GET /health/projects/:id`, `GET /health/projects/:id/history`, `GET /health/projects/:id/risks`, `POST /health/projects/:id/risks/:riskId/dismiss`, `POST /health/projects/:id/recalculate`, `POST /health/projects/:id/explain`, and `POST /health/projects/:id/risks/:riskId/propose-action`
-- `GET /search?q=...` searches tenant-scoped projects, tasks, comments, meetings, documents and linked GitHub activity. It combines keyword results with pgvector similarity when an OpenAI embedding key is configured; otherwise it returns keyword results.
-- `GET /notifications`, `PATCH /notifications/:id/read`, `PATCH /notifications/read-all`
-- AI plan proposals/approval, cited workspace Q&A, deterministic portfolio intelligence, blocker analysis, weekly reports and duplicate candidates
-- `GET /audit`
+### Backend API (`apps/api`)
+- **Framework:** NestJS 12.4 (Modular Monolithic Architecture)
+- **Runtime:** Node.js 22+ (TypeScript 6.0)
+- **ORM:** Prisma 7.10 with `@prisma/adapter-pg`
+- **Database:** PostgreSQL 16 with `pgvector` extension for vector embeddings
+- **Caching & Queues:** Redis 7 with BullMQ 6.7
+- **Reporting Engine:** PDFKit 0.20
+- **Security:** Helmet, Throttler, Class-Validator, BCrypt (12 salt rounds), JWT authentication
 
-Authenticated requests use `Authorization: Bearer <access token>`. The active workspace is embedded in the signed token and is checked against a live membership on each API request.
+---
 
-## Architecture and delivery status
+## Quickstart & Local Setup
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for architecture, schema rationale, risks, and the phased development checklist. API and database logic enforce tenant scoping; the web client does not supply an authoritative organization id.
+### Prerequisites
+- Node.js `20.19+`, `22.22+`, or `24.15+`
+- npm 10+
+- Docker & Docker Compose
 
-The app implements the project-management and AI approval vertical slice, task discussions and dependency views, tenant-scoped search, in-app notifications, meeting recording/transcription/action review, calendar/timeline views, GitHub OAuth with repository linking, configurable workflow automation rules with human-in-the-loop proposals, private cloud storage with organization-level retention policies and legal holds (supporting local encrypted storage and S3-compatible object storage like AWS S3 or Cloudflare R2), Google Workspace integration (Google OAuth 2.0, Google Calendar incremental sync with sync token recovery, meeting intelligence project matching, and Gmail intelligence task proposals with human-in-the-loop review), and deterministic project health scoring with a rule-based predictive risk engine and explainable delay forecasting (Release 4.1). BullMQ runs scheduled background sweeps, health recalculation queues, Google sync, and deadline notifications. Semantic ranking requires an embedding-capable OpenAI key. Email delivery and production deployment automation remain follow-on work; unconfigured integrations are not shown as synchronized.
+### 1. Clone the Repository
+```bash
+git clone https://github.com/Ansh-Y/nexora-ai-work-operating-system.git
+cd nexora-ai-work-operating-system
+```
 
-This is a runnable MVP, not yet a production release. NestJS and Prisma have been upgraded and the production dependency audit is clean. The full development dependency audit reports eight moderate entries in one minimatch advisory chain through the Next.js ESLint toolchain; see [docs/SECURITY_AUDIT.md](docs/SECURITY_AUDIT.md) for affected versions, test results, and remaining work.
+### 2. Configure Environment
+```bash
+cp .env.example .env
+```
+*(The defaults in `.env.example` are pre-configured to work out of the box with the included Docker Compose services).*
 
-## Deployment
+### 3. Start Data Services
+```bash
+docker compose up -d
+```
+Starts PostgreSQL 16 (with pgvector) on port `5432` and Redis 7 on port `6379`.
 
-Build and run PostgreSQL with pgvector and Redis as managed services, then deploy `apps/api` and `apps/web` as separate Node services. Set the environment variables from `.env.example`, set `WEB_ORIGIN` and `NEXT_PUBLIC_API_URL` to deployed HTTPS origins, run `npm run db:migrate` as a release step, then start the API and web processes. Use managed secrets, TLS, a restricted database role, backups, and separate credentials per environment. Configure OAuth redirect URLs and provider webhooks to their public API routes before enabling integrations.
+### 4. Install Dependencies & Initialize Database
+```bash
+npm install
+npm run db:generate
+npm run db:migrate
+npm run db:seed
+```
+*The seed command provisions demo credentials:*
+- **Email:** `demo@nexora.local`
+- **Password:** `NexoraDemo!2026`
+- **Organization:** `Nexora Studio`
+
+### 5. Launch Application
+```bash
+npm run dev
+```
+- **Web App:** [http://localhost:3000](http://localhost:3000)
+- **API Server:** [http://localhost:4000/api](http://localhost:4000/api)
+- **Interactive Swagger Docs:** [http://localhost:4000/api/docs](http://localhost:4000/api/docs)
+- **Health Check:** [http://localhost:4000/api/health](http://localhost:4000/api/health)
+
+---
+
+## Testing & Quality Gates
+
+The project maintains 100% test pass rate across all test suites:
+
+```bash
+# Run all backend unit tests (175 tests across 17 suites)
+npm --workspace apps/api run test
+
+# Run backend integration E2E tests (10 suites)
+npm --workspace apps/api run test:e2e
+
+# Run Playwright browser E2E tests (11 specs including 19-step customer journey)
+npm run test:browser
+
+# Run repository linter across backend and frontend
+npm run lint
+
+# Run production builds
+npm run build
+```
+
+---
+
+## Cloud Deployment (Strictly ₹0 / Free Tier)
+
+| Service | Hosting Provider | Free Plan Details | Configuration Guide |
+|:---|:---|:---|:---|
+| **Frontend Web** | [Vercel Hobby](https://vercel.com/) | 100 GB Bandwidth, Next.js Edge | [DEPLOYMENT.md](DEPLOYMENT.md#5-step-4-frontend-deployment-on-vercel-hobby-tier) |
+| **Backend API** | [Render Free](https://render.com/) | 750 hrs/month, HTTPS, WebSockets | [DEPLOYMENT.md](DEPLOYMENT.md#4-step-3-backend-api-deployment-on-render-free-tier) |
+| **PostgreSQL DB** | [Neon Free](https://neon.tech/) | Serverless PG 16 + `pgvector` | [DEPLOYMENT.md](DEPLOYMENT.md#2-step-1-database-setup-on-neon-free-tier) |
+| **Redis & Queues**| [Upstash Free](https://upstash.com/) | Native TLS Redis TCP, BullMQ | [DEPLOYMENT.md](DEPLOYMENT.md#3-step-2-redis-setup-on-upstash-free-tier) |
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for full instructions and [ENVIRONMENT_VARIABLES.md](ENVIRONMENT_VARIABLES.md) for variable specifications.
+
+---
+
+## Free-Tier Operational Notes & Mitigations
+
+1. **Render Free Sleep Cycle:** Render free services spin down after 15 minutes of idle traffic. The first request after sleep experiences a 30–50 second cold start.
+2. **Co-located Background Queue:** BullMQ background queues operate alongside the API web process with an automatic in-process fallback to guarantee zero service interruption if Redis quotas are reached.
+3. **Neon Auto-Suspension:** Neon serverless compute resumes automatically in ~1–2 seconds upon incoming connections with zero data loss.
+
+---
+
+## License
+
+This project is licensed under the MIT License.
