@@ -35,3 +35,4 @@ apps/api/prisma/*.db
 Thumbs.db
 *.log
 .neon
+.vercel
