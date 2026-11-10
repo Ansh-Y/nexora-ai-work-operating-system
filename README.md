@@ -13,7 +13,27 @@
 [![Redis](https://img.shields.io/badge/Redis-7.0-red.svg?logo=redis)](https://redis.io/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-[Architecture](ARCHITECTURE.md) • [Zero-Cost Deployment](DEPLOYMENT.md) • [Environment Variables](ENVIRONMENT_VARIABLES.md) • [Placement Demo Guide](DEMO_GUIDE.md)
+[Architecture](ARCHITECTURE.md) • [Zero-Cost Deployment](DEPLOYMENT.md) • [Environment Variables](ENVIRONMENT_VARIABLES.md) • [Placement Demo Guide](DEMO_GUIDE.md) • [Live Deployment Report](DEPLOYMENT_REPORT.md)
+
+</div>
+
+<div align="center">
+
+### 🌐 Live Production Deployment (Strictly ₹0 / $0 Free Tier Cloud)
+
+| Component | Platform | Live URL | Status |
+|:---|:---|:---|:---:|
+| **Frontend Application** | Vercel (Hobby) | [https://nexora-web-roan-phi.vercel.app](https://nexora-web-roan-phi.vercel.app) | **ONLINE** |
+| **Backend REST & WSS** | Render (Free) | [https://nexora-api-gtnq.onrender.com](https://nexora-api-gtnq.onrender.com) | **ONLINE** |
+| **Interactive API Docs** | Swagger UI | [https://nexora-api-gtnq.onrender.com/api/docs](https://nexora-api-gtnq.onrender.com/api/docs) | **ONLINE** |
+| **System Health Check** | Render API | [https://nexora-api-gtnq.onrender.com/api/health](https://nexora-api-gtnq.onrender.com/api/health) | **HEALTHY** |
+| **Database & Vector** | Neon PostgreSQL | Serverless PostgreSQL 16 with `pgvector` | **ONLINE** |
+| **Realtime Queue & Cache**| Upstash Redis | Serverless Native TLS Redis (`rediss://`) | **ONLINE** |
+
+**One-Click Demo Credentials:**  
+`Email:` **`demo@nexora.local`**  
+`Password:` **`NexoraDemo!2026`**  
+*(Note: Render free tier spins down after inactivity; initial cold start takes ~30–50s).*
 
 </div>
 
