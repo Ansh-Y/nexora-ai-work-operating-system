@@ -34,3 +34,4 @@ apps/api/prisma/*.db
 .DS_Store
 Thumbs.db
 *.log
+.neon
