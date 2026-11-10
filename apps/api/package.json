@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "start:dev": "nest start --watch",
-    "build": "nest build",
-    "start": "node dist/main.js",
+    "build": "nest build && node -e \"require('fs').writeFileSync('dist/main.js', 'require(\\\"./src/main.js\\\");\\n')\"",
+    "start": "node dist/src/main.js",
     "lint": "eslint src/ && tsc --noEmit",
     "test": "vitest run --config ./vitest.config.mts src/**/*.spec.ts",
     "test:unit": "vitest run --config ./vitest.config.mts src/**/*.spec.ts",
