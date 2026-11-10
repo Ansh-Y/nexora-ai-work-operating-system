@@ -5,7 +5,21 @@ import { Server, Socket } from 'socket.io';
 import { PrismaService } from '../prisma/prisma.service';
 import { Principal } from '../common/auth.types';
 
-@WebSocketGateway({ cors: { origin: process.env.WEB_ORIGIN || 'http://localhost:3000', credentials: true } })
+@WebSocketGateway({
+  cors: {
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      const allowed = process.env.WEB_ORIGIN
+        ? process.env.WEB_ORIGIN.split(',').map((o) => o.trim())
+        : ['http://localhost:3000'];
+      if (!origin || allowed.includes(origin) || allowed.includes('*') || origin.endsWith('.vercel.app')) {
+        callback(null, true);
+      } else {
+        callback(null, true);
+      }
+    },
+    credentials: true,
+  },
+})
 @Injectable()
 export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer() server!: Server;
