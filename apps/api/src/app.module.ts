@@ -18,12 +18,13 @@ import { GitHubModule } from './github/github.module';
 import { StorageModule } from './storage/storage.module';
 import { GoogleModule } from './google/google.module';
 import { ProjectHealthModule } from './project-health/project-health.module';
+import { RealtimeModule } from './realtime/realtime.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['../../.env', '.env'] }),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 120 }]),
-    PrismaModule, AuditModule, AuthModule, OrganizationsModule, ProjectsModule, TasksModule, AiModule, SearchModule, NotificationsModule, MeetingsModule, CalendarModule, GitHubModule, StorageModule, GoogleModule, ProjectHealthModule,
+    PrismaModule, AuditModule, AuthModule, OrganizationsModule, ProjectsModule, TasksModule, AiModule, SearchModule, NotificationsModule, MeetingsModule, CalendarModule, GitHubModule, StorageModule, GoogleModule, ProjectHealthModule, RealtimeModule,
   ],
   controllers: [AppController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
